@@ -17,29 +17,24 @@ interface StatCardProps {
 
 const variantStyles = {
   default: {
-    card: 'border-l-primary',
+    border: 'border-l-primary',
     icon: 'bg-primary/10 text-primary',
-    iconBorder: 'border-primary/20',
   },
   primary: {
-    card: 'border-l-primary',
-    icon: 'gradient-primary text-primary-foreground',
-    iconBorder: 'border-primary/20',
+    border: 'border-l-primary',
+    icon: 'bg-primary/10 text-primary',
   },
   success: {
-    card: 'border-l-success',
-    icon: 'gradient-success text-success-foreground',
-    iconBorder: 'border-success/20',
+    border: 'border-l-success',
+    icon: 'bg-success/10 text-success',
   },
   warning: {
-    card: 'border-l-warning',
-    icon: 'gradient-warning text-warning-foreground',
-    iconBorder: 'border-warning/20',
+    border: 'border-l-warning',
+    icon: 'bg-warning/10 text-warning',
   },
   danger: {
-    card: 'border-l-destructive',
+    border: 'border-l-destructive',
     icon: 'bg-destructive/10 text-destructive',
-    iconBorder: 'border-destructive/20',
   },
 };
 
@@ -55,7 +50,7 @@ export function StatCard({
   const styles = variantStyles[variant];
 
   return (
-    <Card variant="stat" className={cn('animate-fade-in', styles.card, className)}>
+    <Card className={cn('border-l-4', styles.border, className)}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
@@ -82,9 +77,8 @@ export function StatCard({
           </div>
           <div
             className={cn(
-              'flex h-12 w-12 items-center justify-center rounded-xl border shadow-sm',
-              styles.icon,
-              styles.iconBorder
+              'flex h-12 w-12 items-center justify-center rounded-xl',
+              styles.icon
             )}
           >
             <Icon className="h-6 w-6" />
