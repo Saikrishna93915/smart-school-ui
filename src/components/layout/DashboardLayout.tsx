@@ -1,19 +1,23 @@
-import { ReactNode } from 'react';
-import { AppSidebar } from './AppSidebar';
-import { TopBar } from './TopBar';
+import { Navigate, Outlet } from "react-router-dom";
+import { AppSidebar } from "./AppSidebar";
+import { TopBar } from "./TopBar";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface DashboardLayoutProps {
-  children: ReactNode;
-}
+export function DashboardLayout() {
+  const { user } = useAuth();
 
-export function DashboardLayout({ children }: DashboardLayoutProps) {
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex h-screen w-full bg-background">
       <AppSidebar />
-      <div className="flex flex-1 flex-col">
+
+      <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar />
-        <main className="flex-1 overflow-auto p-6">
-          {children}
+        <main className="flex-1 overflow-y-auto p-6">
+          <Outlet />
         </main>
       </div>
     </div>

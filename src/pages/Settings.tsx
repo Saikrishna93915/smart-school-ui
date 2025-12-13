@@ -17,7 +17,7 @@ import { School, Calendar, BookOpen, CreditCard, Bell, Shield, Upload, Save } fr
 
 export default function Settings() {
   return (
-    <DashboardLayout>
+  
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -274,6 +274,6 @@ export default function Settings() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
+   
   );
 }

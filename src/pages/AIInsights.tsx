@@ -1,4 +1,4 @@
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -94,7 +94,7 @@ const riskScoreColor = (score: number) => {
 
 export default function AIInsights() {
   return (
-    <DashboardLayout>
+     
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -352,6 +352,5 @@ export default function AIInsights() {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
   );
 }
