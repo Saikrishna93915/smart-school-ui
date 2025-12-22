@@ -61,13 +61,15 @@ export function AppSidebar() {
   return (
     <aside
       className={cn(
-        'gradient-sidebar flex flex-col border-r border-sidebar-border transition-all duration-300',
+        // h-full ensures sidebar stretches to bottom. 
+        // flex-col + overflow-hidden keeps the layout stable.
+        'gradient-sidebar flex flex-col border-r border-sidebar-border transition-all duration-300 h-full overflow-hidden',
         isCollapsed ? 'w-20' : 'w-64'
       )}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 p-4 border-b border-sidebar-border">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-secondary shadow-glow">
+      <div className="flex h-16 shrink-0 items-center gap-3 p-4 border-b border-sidebar-border">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl gradient-secondary shadow-glow">
           <School className="h-5 w-5 text-secondary-foreground" />
         </div>
         {!isCollapsed && (
@@ -80,7 +82,7 @@ export function AppSidebar() {
           variant="ghost"
           size="icon-sm"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
+          className="text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent ml-auto"
         >
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
@@ -119,15 +121,15 @@ export function AppSidebar() {
         })}
       </nav>
 
-      {/* User Profile */}
-      <div className="border-t border-sidebar-border p-3">
+      {/* User Profile & Sign Out - shrink-0 ensures this stays visible at bottom */}
+      <div className="shrink-0 border-t border-sidebar-border p-3 bg-sidebar-background/50">
         <div
           className={cn(
             'flex items-center gap-3 rounded-lg p-2',
             isCollapsed ? 'justify-center' : ''
           )}
         >
-          <Avatar className="h-9 w-9 border-2 border-secondary">
+          <Avatar className="h-9 w-9 border-2 border-secondary shrink-0">
             <AvatarFallback className="bg-sidebar-accent text-sidebar-foreground text-sm font-semibold">
               {user.name.split(' ').map((n) => n[0]).join('')}
             </AvatarFallback>
@@ -148,7 +150,7 @@ export function AppSidebar() {
             isCollapsed ? 'w-full' : 'w-full justify-start'
           )}
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-4 w-4 shrink-0" />
           {!isCollapsed && <span className="ml-2">Sign Out</span>}
         </Button>
       </div>

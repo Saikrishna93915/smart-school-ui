@@ -1,4 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { TeachersService } from '../Services/teachers.service';
+import { Teacher, AssignedClass, TeacherCreatePayload, TeacherUpdateDetailsPayload } from '../types/teacher';
+import { useAuth } from '../contexts/AuthContext';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,262 +10,41 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { 
-    Search, Plus, GraduationCap, Users, Clock, BookOpen, Mail, Phone, MoreVertical, 
-    Trash2, Eye, Edit, RefreshCw, Loader2, XCircle, Calendar, ChevronsUpDown, User, MapPin, CreditCard 
+    Search, Plus, GraduationCap, Users, Clock, BookOpen, Mail, MoreVertical, 
+    Trash2, Eye, Edit, RefreshCw, Loader2, XCircle, Calendar, User
 } from 'lucide-react';
-// Note: StatCard is mocked below as requested, assuming it was available
-// import { StatCard } from '@/components/dashboard/StatCard'; 
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea'; // Used for Qualification input
-import { Toggle } from '@/components/ui/toggle'; // Used for multi-select
+import { Toggle } from '@/components/ui/toggle'; 
 
-// --- TypeScript Data Interfaces (Matching Requirement) ---
+// --- STATIC CONFIGURATION ---
+const initialDepartments = ['Mathematics', 'Science', 'English', 'Support', 'Computer Science', 'Language', 'Physical Education'];
+const initialClassDropdownValues = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+const initialSectionValues = ['A', 'B', 'C', 'D'];
 
-interface AssignedClass {
-    className: string; // e.g., "10", "LKG"
-    section: string; // e.g., "A", "B"
-}
-
-// User account details required for POST /api/admin/teachers (A)
-interface UserCreationPayload {
-    role: 'teacher';
-    username: string; // Using email as username for simplicity
-    temporaryPassword: string; // Allow any temporary password string
-}
-
-interface Teacher {
-    employeeId: string; // Unique ID
-    _id: string; // Mocked DB ID for CRUD operations
-    personal: {
-        firstName: string;
-        lastName: string;
-        gender: 'Male' | 'Female' | 'Other';
-        dob: string; // YYYY-MM-DD
-    };
-    contact: {
-        phone: string;
-        email: string;
-    };
-    professional: {
-        department: string;
-        subjects: string[];
-        experienceYears: number;
-        qualification: string;
-    };
-    assignedClasses: AssignedClass[];
-    status: 'active' | 'inactive' | 'deleted'; // Added 'deleted' for soft delete tracking
-    // Mocked display properties for table rendering
-    attendance: number; 
-    workload: number;
-}
-
-// Interface for API Service (Updated to match all 7 APIs exactly)
-interface TeacherService {
-    // 1) POST /api/admin/teachers
-    create: (payload: Omit<Teacher, '_id' | 'employeeId' | 'attendance' | 'workload' | 'status'> & UserCreationPayload) => Promise<Teacher>;
-    // 2) GET /api/admin/teachers
-    getAll: () => Promise<Teacher[]>;
-    // 3) GET /api/admin/teachers/:id
-    getById: (id: string) => Promise<Teacher>;
-    // 4) PUT /api/admin/teachers/:id
-    update: (id: string, payload: Partial<Omit<Teacher, 'employeeId' | 'assignedClasses' | 'status'>>) => Promise<Teacher>;
-    // 5) PUT /api/admin/teachers/:id/status
-    updateStatus: (id: string, newStatus: 'active' | 'inactive') => Promise<void>;
-    // 6) PUT /api/admin/teachers/:id/assign-classes
-    assignClasses: (id: string, classes: AssignedClass[]) => Promise<void>;
-    // 7) DELETE /api/admin/teachers/:id (Soft Delete)
-    remove: (id: string) => Promise<void>;
-}
-
-// --- STATIC CONFIGURATION & MOCK DATA ---
-const mockDepartments = ['Mathematics', 'Science', 'English', 'Social Studies', 'Computer Science', 'Language', 'Physical Education', 'Support'];
-const mockSubjects: Record<string, string[]> = {
-    'Mathematics': ['Algebra', 'Geometry', 'Calculus', 'Statistics'],
-    'Science': ['Physics', 'Chemistry', 'Biology', 'Environmental Science'],
-    'English': ['Literature', 'Grammar', 'Composition'],
-    'Computer Science': ['Programming', 'IT', 'Web Development'],
-    'Social Studies': ['History', 'Geography', 'Economics'],
-    'Language': ['Hindi', 'Sanskrit', 'French'],
-    'Physical Education': ['Sports', 'Health'],
-    'Support': ['Counselling', 'Administration'],
-};
-const mockClassDropdownValues = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
-const mockSectionValues = ['A', 'B', 'C', 'D'];
-
-// Note: Initial data is defined globally to persist state across mock API calls
-const initialMockData: Teacher[] = [
-    {
-        _id: 't-1', employeeId: "EMP-001", attendance: 96, workload: 85,
-        personal: { firstName: "Priya", lastName: "Sharma", gender: 'Female', dob: "1990-05-12" },
-        contact: { phone: "9876543210", email: "priya.sharma@school.edu" },
-        professional: { department: "Mathematics", subjects: ["Algebra", "Statistics"], experienceYears: 6, qualification: "M.Sc Maths" },
-        assignedClasses: [{ className: "10", section: "A" }, { className: "9", section: "B" }, { className: "10", section: "B" }, { className: "8", section: "A" }],
-        status: 'active',
-    },
-    {
-        _id: 't-2', employeeId: "EMP-002", attendance: 92, workload: 72,
-        personal: { firstName: "Rahul", lastName: "Verma", gender: 'Male', dob: "1985-08-20" },
-        contact: { phone: "9876543211", email: "rahul.verma@school.edu" },
-        professional: { department: "English", subjects: ["English", "Literature"], experienceYears: 5, qualification: "M.A. English" },
-        assignedClasses: [{ className: "10", section: "A" }, { className: "10", section: "B" }, { className: "9", section: "A" }],
-        status: 'active',
-    },
-    {
-        _id: 't-3', employeeId: "EMP-003", attendance: 98, workload: 90,
-        personal: { firstName: "Meera", lastName: "Nair", gender: 'Female', dob: "1978-11-01" },
-        contact: { phone: "9876543212", email: "meera.nair@school.edu" },
-        professional: { department: "Science", subjects: ["Physics", "Chemistry"], experienceYears: 10, qualification: "Ph.D. Physics" },
-        assignedClasses: [{ className: "10", section: "A" }, { className: "10", section: "B" }, { className: "9", section: "A" }, { className: "9", section: "B" }],
-        status: 'inactive',
-    },
-    {
-        _id: 't-4', employeeId: "EMP-004", attendance: 94, workload: 95,
-        personal: { firstName: "Vikram", lastName: "Singh", gender: 'Male', dob: "1995-02-28" },
-        contact: { phone: "9876543213", email: "vikram.singh@school.edu" },
-        professional: { department: "Computer Science", subjects: ["Programming", "IT"], experienceYears: 6, qualification: "B.Tech CS" },
-        assignedClasses: [{ className: "8", section: "C" }, { className: "7", section: "D" }],
-        status: 'active',
-    },
-];
-
-// Mock API Implementation (Updated to reflect API structure)
-const TeachersService: TeacherService = {
-    // 1) POST /api/admin/teachers (Create Teacher + User account)
-    async create(payload) {
-        return new Promise(resolve => {
-            const newTeacher: Teacher = {
-                // Ensure payload structure is correctly unpacked, ignoring UserCreationPayload fields here as they are backend concerns
-                _id: `t-${Date.now()}`,
-                employeeId: `EMP-${Math.floor(Math.random() * 9000) + 1000}`,
-                attendance: 100,
-                workload: 50,
-                status: 'active',
-                // Explicitly pull fields needed from the combined payload
-                personal: payload.personal,
-                contact: payload.contact,
-                professional: payload.professional,
-                assignedClasses: payload.assignedClasses,
-            };
-            initialMockData.push(newTeacher);
-            setTimeout(() => resolve(newTeacher), 300);
-        });
-    },
-
-    // 2) GET /api/admin/teachers (Get all teachers)
-    async getAll() {
-        return new Promise(resolve => setTimeout(() => resolve(
-            // Filter out softly deleted records for the main list
-            initialMockData.filter(t => t.status !== 'deleted')
-        ), 500));
-    },
-
-    // 3) GET /api/admin/teachers/:id (Get teacher by ID - Must be separate API call)
-    async getById(id: string) {
-        return new Promise((resolve, reject) => {
-            const teacher = initialMockData.find(t => t._id === id);
-            if (teacher) {
-                setTimeout(() => resolve(teacher), 200);
-            } else {
-                setTimeout(() => reject(new Error('Teacher not found')), 200);
-            }
-        });
-    },
-
-    // 4) PUT /api/admin/teachers/:id (Update teacher details - WITHOUT status/classes)
-    async update(id, payload) {
-        return new Promise(resolve => {
-            const index = initialMockData.findIndex(t => t._id === id);
-            if (index !== -1) {
-                const existing = initialMockData[index];
-                const updatedTeacher: Teacher = {
-                    ...existing,
-                    ...payload,
-                    personal: { ...existing.personal, ...payload.personal },
-                    contact: { ...existing.contact, ...payload.contact },
-                    professional: { ...existing.professional, ...payload.professional },
-                    // IMPORTANT: Classes and Status are explicitly excluded from this general update API
-                    assignedClasses: existing.assignedClasses,
-                    status: existing.status,
-                };
-                initialMockData[index] = updatedTeacher;
-                setTimeout(() => resolve(updatedTeacher), 300);
-            } else {
-                throw new Error("Teacher not found");
-            }
-        });
-    },
-
-    // 5) PUT /api/admin/teachers/:id/status (Activate / Deactivate teacher)
-    async updateStatus(id, newStatus) {
-        return new Promise(resolve => {
-            const teacher = initialMockData.find(t => t._id === id);
-            if (teacher) {
-                teacher.status = newStatus;
-                setTimeout(() => resolve(), 300);
-            } else {
-                throw new Error("Teacher not found");
-            }
-        });
-    },
-
-    // 6) PUT /api/admin/teachers/:id/assign-classes (Assign / update classes separately)
-    async assignClasses(id, classes) {
-        return new Promise(resolve => {
-            const teacher = initialMockData.find(t => t._id === id);
-            if (teacher) {
-                teacher.assignedClasses = classes; // Update ONLY classes
-                setTimeout(() => resolve(), 300);
-            } else {
-                throw new Error("Teacher not found");
-            }
-        });
-    },
-
-    // 7) DELETE /api/admin/teachers/:id (Soft delete)
-    async remove(id) {
-        return new Promise(resolve => {
-            const teacher = initialMockData.find(t => t._id === id);
-            if (teacher) {
-                teacher.status = 'deleted'; // Soft delete
-            }
-            // For frontend list, we remove it on the client side after success, 
-            // but the GET /all endpoint handles filtering.
-            setTimeout(() => resolve(), 300);
-        });
-    }
-};
-
-// --- Helper Functions (Unchanged, but now rely on updated service) ---
-
-const createDefaultTeacherFormData = () => ({
+// --- Helper Functions ---
+const createDefaultTeacherFormData = (defaultDept: string) => ({
     _id: undefined as string | undefined,
     employeeId: '',
     firstName: '', lastName: '', gender: 'Male' as 'Male' | 'Female' | 'Other', dob: '',
     phone: '', email: '',
-    department: mockDepartments[0], subjects: [] as string[], experienceYears: 0, qualification: '',
+    department: defaultDept, 
+    subjects: [] as string[], 
+    experienceYears: 0, 
+    qualification: '',
     assignedClasses: [] as AssignedClass[],
     status: 'active' as 'active' | 'inactive',
-    // New fields for User creation payload
     username: '', 
-    temporaryPassword: 'Password123!', // Default temporary password
+    temporaryPassword: 'Password123!', 
 });
 
 const mapTeacherToFormData = (teacher: Teacher) => ({
@@ -270,7 +53,7 @@ const mapTeacherToFormData = (teacher: Teacher) => ({
     firstName: teacher.personal.firstName,
     lastName: teacher.personal.lastName,
     gender: teacher.personal.gender,
-    dob: teacher.personal.dob,
+    dob: teacher.personal.dob ? new Date(teacher.personal.dob).toISOString().split('T')[0] : '', 
     phone: teacher.contact.phone,
     email: teacher.contact.email,
     department: teacher.professional.department,
@@ -278,9 +61,9 @@ const mapTeacherToFormData = (teacher: Teacher) => ({
     experienceYears: teacher.professional.experienceYears,
     qualification: teacher.professional.qualification,
     assignedClasses: teacher.assignedClasses,
-    status: teacher.status === 'deleted' ? 'inactive' : teacher.status, // Prevent 'deleted' from showing in dropdown
-    username: teacher.contact.email, // Use email as username
-    temporaryPassword: 'Password123!',
+    status: teacher.status === 'deleted' ? 'inactive' : (teacher.status as 'active' | 'inactive'),
+    username: teacher.contact.email,
+    temporaryPassword: 'Password123!', 
 });
 
 const calculateTeacherStats = (teachers: Teacher[]) => {
@@ -295,37 +78,48 @@ const calculateTeacherStats = (teachers: Teacher[]) => {
         totalTeachers,
         supportStaff,
         avgAttendance: `${avgAttendance}%`,
-        classesPerDay: 6.2, 
+        classesPerDay: 6.2,
     };
 };
 
-// --- ADD/EDIT MODAL COMPONENT (Updated to use GET by ID, separate APIs for save) ---
+// --- ADD/EDIT MODAL COMPONENT ---
 interface AddEditModalProps {
     isModalOpen: boolean;
     setIsModalOpen: (isOpen: boolean) => void;
-    initialTeacherId: string | null; // Now accepts ID instead of full object
+    initialTeacherId: string | null; 
     refreshTeachers: () => void;
+    allSubjects: Record<string, string[]>;
+    allDepartments: string[];
+    allClasses: string[];
+    allSections: string[];
 }
 
 const AddEditTeacherModal: React.FC<AddEditModalProps> = ({ 
     isModalOpen, 
     setIsModalOpen, 
     initialTeacherId, 
-    refreshTeachers 
+    refreshTeachers,
+    allSubjects,
+    allDepartments,
+    allClasses,
+    allSections,
 }) => {
     
     const isEditMode = !!initialTeacherId;
     
-    const [formData, setFormData] = useState(createDefaultTeacherFormData());
+    const [formData, setFormData] = useState(createDefaultTeacherFormData(allDepartments[0] || initialDepartments[0]));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDataLoading, setIsDataLoading] = useState(false);
-    
-    // Track original classes to determine if assignClasses API needs to be called separately
     const [originalAssignedClasses, setOriginalAssignedClasses] = useState<AssignedClass[]>([]);
 
-    // C. GET /api/admin/teachers/:id - Fetch data when modal opens in edit mode
+    const [customSubjects, setCustomSubjects] = useState<string[]>([]);
+    const [newSubjectInput, setNewSubjectInput] = useState('');
+
     useEffect(() => {
         if (isModalOpen) {
+            setCustomSubjects([]); 
+            setNewSubjectInput('');
+
             if (initialTeacherId) {
                 setIsDataLoading(true);
                 TeachersService.getById(initialTeacherId)
@@ -337,11 +131,18 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
                     .catch(error => console.error("Error fetching teacher details:", error))
                     .finally(() => setIsDataLoading(false));
             } else {
-                setFormData(createDefaultTeacherFormData());
+                setFormData(createDefaultTeacherFormData(allDepartments[0] || initialDepartments[0]));
                 setOriginalAssignedClasses([]);
             }
         }
-    }, [isModalOpen, initialTeacherId]);
+    }, [isModalOpen, initialTeacherId]); 
+    
+    useEffect(() => {
+        if (isModalOpen) {
+             setCustomSubjects([]);
+             setNewSubjectInput('');
+        }
+    }, [formData.department, isModalOpen]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -361,11 +162,27 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
         });
     };
 
-    // Class assignment handlers updated to manage form state (and called separately on submit)
+    const handleAddCustomSubject = () => {
+        const value = newSubjectInput.trim();
+        if (!value) return;
+        
+        if (availableSubjects.includes(value)) {
+            setNewSubjectInput(''); 
+            return;
+        }
+     
+        setCustomSubjects(prev => [...prev, value]);
+        setFormData(prev => ({
+            ...prev,
+            subjects: [...prev.subjects, value], 
+        }));
+        setNewSubjectInput('');
+    };
+
     const handleAddAssignedClass = () => {
         setFormData(prev => ({
             ...prev,
-            assignedClasses: [...prev.assignedClasses, { className: '10', section: 'A' }]
+            assignedClasses: [...prev.assignedClasses, { className: allClasses[0] || initialClassDropdownValues[0], section: allSections[0] || initialSectionValues[0] }]
         }));
     };
 
@@ -386,60 +203,91 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
     };
 
     const handleSubmit = async () => {
+        // 1. DUPLICATE CHECK
+        const uniqueCheck = new Set(formData.assignedClasses.map(ac => `${ac.className}-${ac.section}`));
+        if (uniqueCheck.size !== formData.assignedClasses.length) {
+            alert("Duplicate class/section assignments found. Please ensure each assignment is unique.");
+            return;
+        }
+
         setIsSubmitting(true);
 
-        const personalDetailsPayload = {
+        const detailsPayload: TeacherUpdateDetailsPayload = {
             personal: { firstName: formData.firstName, lastName: formData.lastName, gender: formData.gender, dob: formData.dob, },
             contact: { phone: formData.phone, email: formData.email, },
-            professional: { department: formData.department, subjects: formData.subjects, experienceYears: Number(formData.experienceYears) || 0, qualification: formData.qualification, },
+            professional: { 
+                department: formData.department, 
+                subjects: formData.subjects, 
+                experienceYears: Number(formData.experienceYears) || 0, 
+                qualification: formData.qualification, 
+            },
         };
+
+        // 2. SANITIZE CLASS PAYLOAD
+        const cleanAssignedClasses = formData.assignedClasses.map(({ className, section }) => ({
+            className,
+            section
+        }));
         
         try {
             if (isEditMode && formData._id) {
-                // 1. PUT /api/admin/teachers/:id (Update general details)
-                await TeachersService.update(formData._id, personalDetailsPayload);
+                // UPDATE
+                await TeachersService.update(formData._id, detailsPayload);
 
-                // 2. D. PUT /api/admin/teachers/:id/assign-classes (Update classes separately if they changed)
-                if (JSON.stringify(formData.assignedClasses) !== JSON.stringify(originalAssignedClasses)) {
-                    await TeachersService.assignClasses(formData._id, formData.assignedClasses);
+                // CHECK IF CLASSES CHANGED
+                const originalClean = originalAssignedClasses.map(({ className, section }) => ({ className, section }));
+                
+                if (JSON.stringify(cleanAssignedClasses) !== JSON.stringify(originalClean)) {
+                    // This call sends the array. The Service file wraps it in { assignedClasses: [...] }
+                    await TeachersService.assignClasses(formData._id, cleanAssignedClasses);
                 }
 
-                // Note: Status changes are handled via the separate toggle function, not here.
-
             } else {
-                // A. POST /api/admin/teachers (Create Teacher + User account)
+                // CREATE
                 const createPayload = {
-                    ...personalDetailsPayload,
-                    assignedClasses: formData.assignedClasses,
-                    status: formData.status,
-                    // Required User Creation Payload fields
-                    role: 'teacher' as 'teacher',
-                    username: formData.email,
-                    temporaryPassword: formData.temporaryPassword,
+                    employeeId: formData.employeeId,
+                    designation: 'Teacher', 
+                    personal: detailsPayload.personal,
+                    contact: detailsPayload.contact,
+                    professional: {
+                        ...detailsPayload.professional,
+                        subjects: formData.subjects ?? []
+                    },
+                    assignedClasses: cleanAssignedClasses,
+                    password: formData.temporaryPassword,
+                    confirmPassword: formData.temporaryPassword, 
                 };
-                await TeachersService.create(createPayload);
+                
+                await TeachersService.create(createPayload as unknown as TeacherCreatePayload); 
             }
             
             refreshTeachers();
             setIsModalOpen(false); 
         } catch (error) {
             console.error(`Error ${isEditMode ? 'updating' : 'creating'} teacher:`, error);
+            alert("An error occurred. Please check console for details.");
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const availableSubjects = mockSubjects[formData.department] || [];
+    const availableSubjects = useMemo(() => {
+        return [
+            ...(allSubjects[formData.department] || []),
+            ...customSubjects,
+        ].filter((value, index, self) => self.indexOf(value) === index); 
+    }, [allSubjects, formData.department, customSubjects]);
+
 
     if (isDataLoading) {
         return (
              <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="max-w-5xl h-[90vh] flex items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Loading profile data...
-                </DialogContent>
-            </Dialog>
-        );
-    }
+                 <DialogContent className="max-w-5xl h-[90vh] flex items-center justify-center">
+                     <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" /> Loading profile data...
+                 </DialogContent>
+             </Dialog>
+            );
+       }
     
     return (
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -456,11 +304,39 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
                     
                     {/* PERSONAL & CONTACT DETAILS */}
                     <div className="space-y-4 form-section">
-                        <h3 className="text-base font-semibold border-b pb-2 flex items-center text-primary/80"><User className="h-4 w-4 mr-2"/> Personal & Contact</h3>
+                        <h3 className="text-base font-semibold border-b pb-2 flex items-center text-primary/80">
+                            <User className="h-4 w-4 mr-2" /> Personal & Contact
+                        </h3>
+
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            <div><Label htmlFor="firstName">First Name</Label><Input id="firstName" name="firstName" value={formData.firstName} onChange={handleInputChange} required /></div>
-                            <div><Label htmlFor="lastName">Last Name</Label><Input id="lastName" name="lastName" value={formData.lastName} onChange={handleInputChange} required /></div>
-                            <div><Label htmlFor="dob">Date of Birth</Label><Input id="dob" name="dob" type="date" value={formData.dob} onChange={handleInputChange} required /></div>
+
+                            {/* Employee ID (Add Mode Only) */}
+                            {!isEditMode && (
+                                <div>
+                                    <Label htmlFor="employeeId">Employee ID</Label>
+                                    <Input
+                                        id="employeeId" name="employeeId"
+                                        placeholder="EMP-004"
+                                        value={formData.employeeId} onChange={handleInputChange} required
+                                    />
+                                </div>
+                            )}
+
+                            <div>
+                                <Label htmlFor="firstName">First Name</Label>
+                                <Input id="firstName" name="firstName" value={formData.firstName} onChange={handleInputChange} required />
+                            </div>
+
+                            <div>
+                                <Label htmlFor="lastName">Last Name</Label>
+                                <Input id="lastName" name="lastName" value={formData.lastName} onChange={handleInputChange} required />
+                            </div>
+
+                            <div>
+                                <Label htmlFor="dob">Date of Birth</Label>
+                                <Input id="dob" name="dob" type="date" value={formData.dob} onChange={handleInputChange} required />
+                            </div>
+
                             <div>
                                 <Label htmlFor="gender">Gender</Label>
                                 <Select value={formData.gender} onValueChange={(value) => handleSelectChange('gender', value)}>
@@ -472,8 +348,7 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
                                     </SelectContent>
                                 </Select>
                             </div>
-                            
-                            {/* A. POST /api/admin/teachers requires username/email for user creation */}
+
                             <div><Label htmlFor="email">Email (Username)</Label><Input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} required /></div>
                             
                             {!isEditMode && (
@@ -505,7 +380,7 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
                                 >
                                     <SelectTrigger><SelectValue placeholder="Department" /></SelectTrigger>
                                     <SelectContent>
-                                        {mockDepartments.map(dept => <SelectItem key={dept} value={dept}>{dept}</SelectItem>)}
+                                        {allDepartments.map(dept => <SelectItem key={dept} value={dept}>{dept}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -535,7 +410,18 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
                                             </Toggle>
                                         ))
                                     ) : (
-                                        <p className="text-sm text-muted-foreground">No subjects defined for this department.</p>
+                                        <>
+                                            <p className="text-sm text-muted-foreground mb-2 w-full">No subjects defined for this department. Add manually.</p>
+                                            <div className="flex gap-2 w-full">
+                                                <Input
+                                                    placeholder="Enter subject name..."
+                                                    value={newSubjectInput}
+                                                    onChange={(e) => setNewSubjectInput(e.target.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && handleAddCustomSubject()} 
+                                                />
+                                                <Button type="button" onClick={handleAddCustomSubject}>Add Subject</Button>
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -554,40 +440,27 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                             {formData.assignedClasses.map((assignment, index) => (
                                 <div key={index} className="flex items-center gap-2 p-3 border rounded-md bg-white shadow-sm">
-                                    
-                                    {/* Class Select */}
                                     <Select 
                                         value={assignment.className} 
                                         onValueChange={(value) => handleUpdateAssignedClass(index, 'className', value)}
                                     >
-                                        <SelectTrigger className="w-[100px] h-9">
-                                            <SelectValue placeholder="Class" />
-                                        </SelectTrigger>
+                                        <SelectTrigger className="w-[100px] h-9"><SelectValue placeholder="Class" /></SelectTrigger>
                                         <SelectContent>
-                                            {mockClassDropdownValues.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                            {allClasses.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                     
-                                    {/* Section Select */}
                                     <Select 
                                         value={assignment.section} 
                                         onValueChange={(value) => handleUpdateAssignedClass(index, 'section', value)}
                                     >
-                                        <SelectTrigger className="w-[80px] h-9">
-                                            <SelectValue placeholder="Sec" />
-                                        </SelectTrigger>
+                                        <SelectTrigger className="w-[80px] h-9"><SelectValue placeholder="Sec" /></SelectTrigger>
                                         <SelectContent>
-                                            {mockSectionValues.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                            {allSections.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                     
-                                    <Button 
-                                        type="button" 
-                                        variant="ghost" 
-                                        size="icon-sm" 
-                                        onClick={() => handleRemoveAssignedClass(index)}
-                                        className="text-destructive ml-auto"
-                                    >
+                                    <Button type="button" variant="ghost" size="icon-sm" onClick={() => handleRemoveAssignedClass(index)} className="text-destructive ml-auto">
                                         <XCircle className="h-4 w-4" />
                                     </Button>
                                 </div>
@@ -603,7 +476,7 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
                     <Button 
                         type="submit" 
                         onClick={handleSubmit} 
-                        disabled={isSubmitting || formData.subjects.length === 0 || !formData.firstName || !formData.email || !formData.qualification}
+                        disabled={isSubmitting || !formData.firstName || !formData.email || !formData.qualification}
                     >
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {isEditMode ? 'Save Changes' : 'Save Staff Member'}
@@ -614,7 +487,7 @@ const AddEditTeacherModal: React.FC<AddEditModalProps> = ({
     );
 };
 
-// --- SCHEDULE MANAGEMENT MODAL (Placeholder) ---
+// --- SCHEDULE MANAGEMENT MODAL (Read-Only View) ---
 interface ScheduleModalProps {
     isModalOpen: boolean;
     setIsModalOpen: (isOpen: boolean) => void;
@@ -627,16 +500,12 @@ const ScheduleManagementModal: React.FC<ScheduleModalProps> = ({ isModalOpen, se
             <DialogContent className="max-w-4xl">
                 <DialogHeader>
                     <DialogTitle>View Schedule: {teacher.personal.firstName} {teacher.personal.lastName}</DialogTitle>
-                    <DialogDescription>
-                        Current Class and Subject Assignments.
-                    </DialogDescription>
+                    <DialogDescription>Employee ID: {teacher.employeeId} | {teacher.contact.email}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                     <div className="flex justify-between items-start flex-wrap gap-4 p-4 border rounded-lg bg-muted/30">
                         <div>
-                            <h4 className="font-semibold text-lg flex items-center mb-1">
-                                <BookOpen className="h-4 w-4 mr-2" /> Subjects
-                            </h4>
+                            <h4 className="font-semibold text-lg flex items-center mb-1"><BookOpen className="h-4 w-4 mr-2" /> Subjects</h4>
                             <div className="flex flex-wrap gap-2">
                                 {teacher.professional.subjects.map((sub, index) => (
                                     <Badge key={index} variant="outline" className="bg-white">{sub}</Badge>
@@ -644,9 +513,7 @@ const ScheduleManagementModal: React.FC<ScheduleModalProps> = ({ isModalOpen, se
                             </div>
                         </div>
                         <div>
-                            <h4 className="font-semibold text-lg flex items-center mb-1">
-                                <Users className="h-4 w-4 mr-2" /> Assigned Classes
-                            </h4>
+                            <h4 className="font-semibold text-lg flex items-center mb-1"><Users className="h-4 w-4 mr-2" /> Assigned Classes</h4>
                             <div className="flex flex-wrap gap-2">
                                 {teacher.assignedClasses.map((ac, index) => (
                                     <Badge key={index} variant="secondary">Class {ac.className}-{ac.section}</Badge>
@@ -654,12 +521,8 @@ const ScheduleManagementModal: React.FC<ScheduleModalProps> = ({ isModalOpen, se
                             </div>
                         </div>
                     </div>
-
                     <div className="p-4 border rounded-lg bg-background shadow-inner h-64 flex items-center justify-center">
-                        <p className="text-lg text-muted-foreground flex items-center">
-                            <Calendar className="h-6 w-6 mr-2" />
-                            Weekly Schedule Grid Placeholder (Needs backend data integration)
-                        </p>
+                        <p className="text-lg text-muted-foreground flex items-center"><Calendar className="h-6 w-6 mr-2" /> Weekly Schedule Grid Placeholder</p>
                     </div>
                 </div>
             </DialogContent>
@@ -668,10 +531,19 @@ const ScheduleManagementModal: React.FC<ScheduleModalProps> = ({ isModalOpen, se
 };
 
 
-// --- MAIN TEACHERS COMPONENT (Updated Action Handlers) ---
+// --- MAIN TEACHERS COMPONENT (API Integrated) ---
 export default function Teachers() {
+    const { isAuthenticated } = useAuth();
+    
     const [teachers, setTeachers] = useState<Teacher[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isError, setIsError] = useState(false);
+    
+    // Dynamically loaded filter options
+    const [dynamicDepartments, setDynamicDepartments] = useState<string[]>(initialDepartments);
+    const [dynamicSubjects, setDynamicSubjects] = useState<Record<string, string[]>>({});
+    const [dynamicClasses, setDynamicClasses] = useState<string[]>(initialClassDropdownValues);
+    const [dynamicSections, setDynamicSections] = useState<string[]>(initialSectionValues);
 
     // Filter States
     const [searchQuery, setSearchQuery] = useState('');
@@ -683,21 +555,67 @@ export default function Teachers() {
     // Modal States
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-    // B. GET /api/admin/teachers/:id - Now stores only the ID for fetching fresh data
     const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
-    const [selectedTeacherData, setSelectedTeacherData] = useState<Teacher | null>(null); // For Schedule modal
+    const [selectedTeacherData, setSelectedTeacherData] = useState<Teacher | null>(null); 
 
-    // Mock Stats (Calculated on data fetch)
+    // Stats
     const [stats, setStats] = useState(calculateTeacherStats([]));
     
+    // --- Data Fetching and Dynamic Filter Population ---
+    const populateFilters = useCallback((data: Teacher[]) => {
+        const uniqueDepts = new Set<string>(initialDepartments); 
+        const subjectMap: Record<string, Set<string>> = {};
+        const uniqueClasses = new Set<string>(initialClassDropdownValues); 
+        const uniqueSections = new Set<string>(initialSectionValues); 
+
+        data.forEach(teacher => {
+            uniqueDepts.add(teacher.professional.department);
+            
+            if (!subjectMap[teacher.professional.department]) {
+                subjectMap[teacher.professional.department] = new Set();
+            }
+            teacher.professional.subjects.forEach(sub => {
+                subjectMap[teacher.professional.department].add(sub);
+            });
+            
+            teacher.assignedClasses.forEach(ac => {
+                uniqueClasses.add(ac.className);
+                uniqueSections.add(ac.section);
+            });
+        });
+
+        setDynamicDepartments(Array.from(uniqueDepts).sort());
+        
+        const finalSubjectMap: Record<string, string[]> = {};
+        for (const [dept, subjects] of Object.entries(subjectMap)) {
+            finalSubjectMap[dept] = Array.from(subjects).sort();
+        }
+        setDynamicSubjects(finalSubjectMap);
+        setDynamicClasses(Array.from(uniqueClasses).sort());
+        setDynamicSections(Array.from(uniqueSections).sort());
+    }, []);
+
     const fetchTeachers = async () => {
+        if (!isAuthenticated) {
+            setIsLoading(false);
+            setIsError(true);
+            return;
+        }
+
         setIsLoading(true);
+        setIsError(false);
+
         try {
             const data = await TeachersService.getAll();
-            setTeachers(data);
-            setStats(calculateTeacherStats(data));
+            const activeTeachers = data.filter(t => t.status !== 'deleted');
+
+            setTeachers(activeTeachers);
+            setStats(calculateTeacherStats(activeTeachers));
+            populateFilters(activeTeachers);
+
         } catch (err) {
             console.error("Failed to fetch teachers:", err);
+            setIsError(true);
         } finally {
             setIsLoading(false);
         }
@@ -705,9 +623,9 @@ export default function Teachers() {
 
     useEffect(() => {
         fetchTeachers();
-    }, []);
+    }, [isAuthenticated]); 
 
-    // Memoized Filtered List (Unchanged logic)
+    // Memoized Filtered List 
     const filteredTeachers = useMemo(() => {
         return teachers.filter((teacher) => {
             const searchLower = searchQuery.toLowerCase();
@@ -723,18 +641,21 @@ export default function Teachers() {
             const matchesDepartment = filterDepartment === 'all' || teacher.professional.department === filterDepartment;
             const matchesSubject = filterSubject === 'all' || teacher.professional.subjects.includes(filterSubject);
 
-            const matchesClassSection = teacher.assignedClasses.some(ac => {
-                const classMatch = filterClass === 'all' || ac.className === filterClass;
-                const sectionMatch = filterSection === 'all' || ac.section === filterSection;
-                return classMatch && sectionMatch;
-            });
+            // ✅ FIX: Allow "Support" staff (0 classes) to show when filters are 'all'
+            const matchesClassSection = 
+                (filterClass === 'all' && filterSection === 'all') 
+                ? true 
+                : teacher.assignedClasses.some(ac => {
+                    const classMatch = filterClass === 'all' || ac.className === filterClass;
+                    const sectionMatch = filterSection === 'all' || ac.section === filterSection;
+                    return classMatch && sectionMatch;
+                });
             
             return matchesSearch && matchesDepartment && matchesSubject && matchesClassSection;
         });
     }, [teachers, searchQuery, filterDepartment, filterSubject, filterClass, filterSection]);
     
-    // --- Action Handlers (Updated for API compliance) ---
-
+    // --- Action Handlers ---
     const handleOpenAdd = () => {
         setSelectedTeacherId(null);
         setIsEditModalOpen(true);
@@ -747,40 +668,34 @@ export default function Teachers() {
 
     const handleOpenView = async (teacherId: string) => {
         try {
-            // B. GET /api/admin/teachers/:id - Fetch fresh data for viewing/scheduling
             const data = await TeachersService.getById(teacherId);
             setSelectedTeacherData(data);
-            // Assuming we also use this for view profile
-            // For now, we only open the schedule modal if data is fetched
             handleOpenSchedule(data); 
         } catch (error) {
             console.error("Failed to fetch teacher profile for viewing:", error);
         }
     };
     
-    // Updated to accept full data object
     const handleOpenSchedule = (teacher: Teacher) => {
         setSelectedTeacherData(teacher);
         setIsScheduleModalOpen(true);
     };
 
-    // C. PUT /api/admin/teachers/:id/status (Toggle status)
     const handleToggleStatus = async (teacher: Teacher) => {
         const newStatus = teacher.status === 'active' ? 'inactive' : 'active';
         try {
             await TeachersService.updateStatus(teacher._id, newStatus);
-            fetchTeachers(); // Refresh table
+            fetchTeachers(); 
         } catch (error) {
             console.error("Failed to toggle status:", error);
         }
     };
 
-    // E. DELETE /api/admin/teachers/:id (Soft delete)
     const handleDelete = async (teacherId: string, name: string) => {
-        if (!window.confirm(`Are you sure you want to soft delete ${name}? They will be marked as inactive in the system.`)) return;
+        if (!window.confirm(`Are you sure you want to soft delete ${name}?`)) return;
         try {
             await TeachersService.remove(teacherId);
-            fetchTeachers(); // Refresh table, which filters out 'deleted' status
+            fetchTeachers(); 
         } catch (error) {
             console.error("Failed to soft delete teacher:", error);
         }
@@ -797,17 +712,29 @@ export default function Teachers() {
     const isFilterActive = searchQuery !== '' || filterDepartment !== 'all' || filterSubject !== 'all' || filterClass !== 'all' || filterSection !== 'all';
 
     const subjectsForFilter = useMemo(() => {
-        if (filterDepartment !== 'all' && mockSubjects[filterDepartment]) {
-            return mockSubjects[filterDepartment];
+        if (filterDepartment !== 'all' && dynamicSubjects[filterDepartment]) {
+            return dynamicSubjects[filterDepartment];
         }
         const allSubjects = new Set<string>();
-        Object.values(mockSubjects).forEach(subs => subs.forEach(sub => allSubjects.add(sub)));
+        Object.values(dynamicSubjects).forEach(subs => subs.forEach(sub => allSubjects.add(sub)));
         return Array.from(allSubjects).sort();
-    }, [filterDepartment]);
+    }, [filterDepartment, dynamicSubjects]);
 
     // RENDER: Teacher Table Content
     const renderTableContent = () => {
-        if (filteredTeachers.length === 0) {
+        if (isError) {
+            return (
+                 <TableRow>
+                     <TableCell colSpan={7} className="text-center py-8 text-lg text-destructive">
+                         Error loading staff list. Ensure you are authenticated and the backend is running.
+                         <Button variant="ghost" className="ml-4 text-sm" onClick={fetchTeachers}>
+                             <RefreshCw className="h-4 w-4 mr-1" /> Retry
+                         </Button>
+                     </TableCell>
+                 </TableRow>
+             );
+        }
+        if (filteredTeachers.length === 0 && !isLoading) {
             return (
                 <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-lg text-muted-foreground">
@@ -890,7 +817,7 @@ export default function Teachers() {
                 </TableCell>
                 <TableCell>
                     <Badge
-                        variant={teacher.status === 'active' ? 'success' : 'warning'}
+                        variant={teacher.status === 'active' ? 'default' : 'secondary'}
                         className={teacher.status === 'active' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}
                     >
                         {teacher.status}
@@ -941,6 +868,10 @@ export default function Teachers() {
                 setIsModalOpen={setIsEditModalOpen}
                 initialTeacherId={selectedTeacherId} 
                 refreshTeachers={fetchTeachers} 
+                allSubjects={dynamicSubjects}
+                allDepartments={dynamicDepartments}
+                allClasses={dynamicClasses}
+                allSections={dynamicSections}
             />
             
             {/* Schedule Modal */}
@@ -993,58 +924,43 @@ export default function Teachers() {
                             />
                         </div>
 
-                        {/* A) Filter by Department */}
-                        <Select value={filterDepartment} onValueChange={(val) => {
-                            setFilterDepartment(val);
-                            setFilterSubject('all'); 
-                        }}>
-                            <SelectTrigger className="w-full sm:w-[150px] order-2">
-                                <SelectValue placeholder="Department" />
-                            </SelectTrigger>
+                        {/* Filters */}
+                        <Select value={filterDepartment} onValueChange={(val) => { setFilterDepartment(val); setFilterSubject('all'); }}>
+                            <SelectTrigger className="w-full sm:w-[150px] order-2"><SelectValue placeholder="Department" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Departments</SelectItem>
-                                {mockDepartments.map(dept => <SelectItem key={dept} value={dept}>{dept}</SelectItem>)}
+                                {dynamicDepartments.map(dept => <SelectItem key={dept} value={dept}>{dept}</SelectItem>)}
                             </SelectContent>
                         </Select>
 
-                        {/* B) Filter by Subject */}
                         <Select 
                             value={filterSubject} 
                             onValueChange={setFilterSubject}
                             disabled={filterDepartment !== 'all' && subjectsForFilter.length === 0}
                         >
-                            <SelectTrigger className="w-full sm:w-[150px] order-3">
-                                <SelectValue placeholder="Subject" />
-                            </SelectTrigger>
+                            <SelectTrigger className="w-full sm:w-[150px] order-3"><SelectValue placeholder="Subject" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Subjects</SelectItem>
                                 {subjectsForFilter.map(sub => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}
                             </SelectContent>
                         </Select>
 
-                        {/* C) Filter by Class */}
                         <Select value={filterClass} onValueChange={setFilterClass}>
-                            <SelectTrigger className="w-full sm:w-[120px] order-4">
-                                <SelectValue placeholder="Class" />
-                            </SelectTrigger>
+                            <SelectTrigger className="w-full sm:w-[120px] order-4"><SelectValue placeholder="Class" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Classes</SelectItem>
-                                {mockClassDropdownValues.map(cls => <SelectItem key={cls} value={cls}>{cls}</SelectItem>)}
+                                {dynamicClasses.map(cls => <SelectItem key={cls} value={cls}>{cls}</SelectItem>)}
                             </SelectContent>
                         </Select>
 
-                        {/* D) Filter by Section */}
                         <Select value={filterSection} onValueChange={setFilterSection}>
-                            <SelectTrigger className="w-full sm:w-[100px] order-5">
-                                <SelectValue placeholder="Section" />
-                            </SelectTrigger>
+                            <SelectTrigger className="w-full sm:w-[100px] order-5"><SelectValue placeholder="Section" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Sections</SelectItem>
-                                {mockSectionValues.map(sec => <SelectItem key={sec} value={sec}>{sec}</SelectItem>)}
+                                {dynamicSections.map(sec => <SelectItem key={sec} value={sec}>{sec}</SelectItem>)}
                             </SelectContent>
                         </Select>
                         
-                         {/* RESET Button */}
                         {isFilterActive && (
                             <Button 
                                 variant="outline" 
@@ -1070,7 +986,7 @@ export default function Teachers() {
                 <CardContent>
                     <div className="rounded-lg border overflow-hidden">
                         {isLoading ? (
-                             <div className="text-center py-8 text-lg text-primary">
+                            <div className="text-center py-8 text-lg text-primary">
                                 <Loader2 className="h-6 w-6 inline-block mr-2 animate-spin" />
                                 Fetching staff list...
                             </div>

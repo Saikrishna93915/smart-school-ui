@@ -11,12 +11,14 @@ export function DashboardLayout() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-background">
+    // overflow-hidden is mandatory here to prevent the whole page from shifting
+    <div className="flex h-screen w-full bg-background overflow-hidden">
       <AppSidebar />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-background">
         <TopBar />
-        <main className="flex-1 overflow-y-auto p-6">
+        {/* Only this main section should scroll */}
+        <main className="flex-1 overflow-y-auto p-6 bg-background">
           <Outlet />
         </main>
       </div>

@@ -1,10 +1,29 @@
+/* 1. MOVE IMPORT TO THE VERY TOP (Fixes terminal error) */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-
 @layer base {
+  /* 2. GLOBAL RESET: This fixes the white spaces at top/bottom */
+  html, 
+  body, 
+  #root {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden; /* Prevents white spaces during scroll or "lifting" */
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    @apply border-border;
+  }
+
   :root {
     --background: 210 20% 98%;
     --foreground: 222 47% 11%;
@@ -119,12 +138,6 @@
     --sidebar-border: 222 40% 15%;
     --sidebar-ring: 174 62% 50%;
     --sidebar-muted: 222 30% 40%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
   }
 
   body {

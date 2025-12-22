@@ -18,8 +18,9 @@ export function TopBar() {
   });
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-md">
-      <div className="flex h-16 items-center justify-between px-6">
+    // Fixed height h-16 + z-index + solid bg-card ensures it sits flush at the top
+    <header className="sticky top-0 z-40 h-16 shrink-0 border-b border-border bg-card backdrop-blur-md">
+      <div className="flex h-full items-center justify-between px-6">
         {/* Left: Search */}
         <div className="flex items-center gap-4 flex-1 max-w-md">
           <div className="relative w-full">
@@ -27,7 +28,6 @@ export function TopBar() {
             <Input
               placeholder="Search students, classes, reports..."
               className="pl-10 bg-muted/50 border-0"
-              variant="filled"
             />
           </div>
         </div>
@@ -40,15 +40,13 @@ export function TopBar() {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
-          <Badge variant="muted" className="hidden sm:flex">
+          <Badge variant="outline" className="hidden sm:flex bg-muted/50">
             {roleLabels[user.role]}
           </Badge>
           
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
-            <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">
-              3
-            </span>
+            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
           </Button>
         </div>
       </div>

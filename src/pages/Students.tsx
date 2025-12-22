@@ -224,7 +224,7 @@ const AddEditStudentModal: React.FC<AddEditModalProps> = ({
         student: {
             firstName: currentFormData.firstName,
             lastName: currentFormData.lastName,
-            gender: currentFormData.gender,
+            gender: currentFormData.gender as 'Male' | 'Female' | 'Other',
             dob: currentFormData.dob,
         },
         class: {
