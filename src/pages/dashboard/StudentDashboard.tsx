@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -5,13 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { UserCheck, BookOpen, Trophy, Calendar, Clock, ChevronRight } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 
-const studentInfo = {
-  name: 'Arjun Verma',
-  class: '10-A',
-  rollNo: '24',
-  house: 'Blue House',
-};
-
+// Static data (unchanged)
 const subjectData = [
   { subject: 'Math', score: 92, fullMark: 100 },
   { subject: 'Science', score: 88, fullMark: 100 },
@@ -36,24 +32,115 @@ const upcomingExams = [
 ];
 
 const achievements = [
-  { id: 1, title: 'Perfect Attendance', icon: '🎯', date: 'Nov 2024' },
-  { id: 2, title: 'Math Olympiad', icon: '🏆', date: 'Oct 2024' },
+  { id: 1, title: 'Perfect Attendance', icon: '🏆', date: 'Nov 2024' },
+  { id: 2, title: 'Math Olympiad', icon: '🥇', date: 'Oct 2024' },
   { id: 3, title: 'Science Fair Winner', icon: '🔬', date: 'Sep 2024' },
 ];
 
 export default function StudentDashboard() {
+  const [studentData, setStudentData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchStudentData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        const response = await axios.get('http://localhost:8080/api/student/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.data.success) {
+          setStudentData(response.data.data);
+        } else {
+          throw new Error('Failed to fetch student data');
+        }
+      } catch (err) {
+        setError(err.message || 'An error occurred while fetching data');
+        console.error('Error fetching student data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStudentData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-lg">Loading student dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center p-6 border border-destructive rounded-lg bg-destructive/5">
+          <p className="text-destructive text-lg font-semibold">Error loading dashboard</p>
+          <p className="text-muted-foreground mt-2">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!studentData) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-lg">No student data available</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Welcome, {studentInfo.name}!</h1>
+        <h1 className="text-2xl font-bold">Welcome, {studentData.name}!</h1>
         <div className="flex items-center gap-3 mt-2">
-          <Badge variant="secondary">Class {studentInfo.class}</Badge>
-          <Badge variant="outline">Roll No. {studentInfo.rollNo}</Badge>
+          <Badge variant="secondary">Class {studentData.className}-{studentData.section}</Badge>
+          <Badge variant="outline">Admission No. {studentData.admissionNumber}</Badge>
           <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">
-            {studentInfo.house}
+            {studentData.gender}
           </Badge>
+          {studentData.status && (
+            <Badge className={`${
+              studentData.status === 'active' 
+                ? 'bg-green-500/10 text-green-600 border-green-500/20'
+                : 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+            }`}>
+              {studentData.status}
+            </Badge>
+          )}
         </div>
+        {studentData.fatherName && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Father: {studentData.fatherName} | Mother: {studentData.motherName}
+          </p>
+        )}
+        {studentData.address && (
+          <p className="text-sm text-muted-foreground">
+            {studentData.address.city}, {studentData.address.state}
+          </p>
+        )}
       </div>
 
       {/* Stats Grid */}

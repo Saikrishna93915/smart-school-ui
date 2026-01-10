@@ -5,6 +5,7 @@ import { UserRole, roleLabels } from "@/types/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/use-toast"; // ✅ Import Toast
 import {
   School,
   User,
@@ -14,6 +15,7 @@ import {
   Building2,
   Eye,
   EyeOff,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,75 +34,81 @@ const roleOptions: {
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { toast } = useToast(); // ✅ Initialize Toast
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState<UserRole>("admin");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setIsLoading(true);
 
     try {
-      await login(email, password, selectedRole);
+      await login(username, password, selectedRole);
+      
+      // Success Pop-up
+      toast({
+        title: "Login Successful",
+        description: `Welcome back, ${username}!`,
+        variant: "default",
+      });
+      
       navigate("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Invalid email or password");
+      // ✅ TOP-RIGHT ERROR POP-UP
+      toast({
+        variant: "destructive",
+        title: "Authentication Failed",
+        description: err.message || "Invalid credentials. Please check your password.",
+        duration: 4000,
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
+  const isEmailRole = selectedRole === "admin" || selectedRole === "owner" || selectedRole === "teacher";
+
   return (
-    <div className="min-h-screen flex">
-      {/* LEFT PANEL – BRANDING */}
+    <div className="min-h-screen flex bg-slate-50">
+      {/* LEFT PANEL – BRANDING & STATS */}
       <div className="hidden lg:flex lg:w-1/2 gradient-primary relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-20 w-64 h-64 rounded-full bg-secondary blur-3xl" />
           <div className="absolute bottom-20 right-20 w-96 h-96 rounded-full bg-accent blur-3xl" />
         </div>
 
-        <div className="relative z-10 flex flex-col justify-center px-12 text-primary-foreground">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary shadow-glow">
-              <School className="h-8 w-8 text-secondary-foreground" />
+        <div className="relative z-10 flex flex-col justify-center px-16 text-primary-foreground">
+          <div className="flex items-center gap-4 mb-12">
+            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-secondary shadow-2xl">
+              <School className="h-10 w-10 text-secondary-foreground" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold">AI School ERP</h1>
-              <p className="text-primary-foreground/80">
-                Smart Education Platform
-              </p>
+              <h1 className="text-4xl font-black tracking-tight">AI School ERP</h1>
+              <p className="text-primary-foreground/80 font-bold uppercase text-xs tracking-widest">Smart Education Platform</p>
             </div>
           </div>
 
-          <div className="space-y-6 max-w-md">
-            <h2 className="text-4xl font-bold leading-tight">
-              Transform Your School with Intelligent Management
+          <div className="space-y-8 max-w-lg">
+            <h2 className="text-5xl font-black leading-[1.1] tracking-tighter italic">
+              TRANSFORM YOUR SCHOOL WITH INTELLIGENT AI
             </h2>
-            <p className="text-lg text-primary-foreground/80">
-              Powered by AI to manage students, automate attendance, track
-              performance, and make data-driven decisions.
+            <p className="text-xl text-primary-foreground/80 leading-relaxed font-medium">
+              The next generation of school management. Automate attendance, 
+              track performance, and empower teachers with AI-driven insights.
             </p>
 
-            <div className="grid grid-cols-2 gap-4 pt-4">
+            <div className="grid grid-cols-2 gap-6 pt-8">
               {[
                 { label: "Students Managed", value: "50,000+" },
-                { label: "Schools Trust Us", value: "200+" },
                 { label: "Attendance Accuracy", value: "99.9%" },
-                { label: "AI Insights Daily", value: "10,000+" },
               ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="bg-primary-foreground/10 rounded-lg p-4"
-                >
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className="text-sm text-primary-foreground/70">
-                    {stat.label}
-                  </p>
+                <div key={stat.label} className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10 shadow-xl">
+                  <p className="text-3xl font-black italic">{stat.value}</p>
+                  <p className="text-sm font-bold text-primary-foreground/60 uppercase tracking-tighter">{stat.label}</p>
                 </div>
               ))}
             </div>
@@ -109,94 +117,96 @@ export default function Login() {
       </div>
 
       {/* RIGHT PANEL – LOGIN FORM */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-background">
-        <div className="w-full max-w-md space-y-8">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold">Welcome Back</h2>
-            <p className="text-muted-foreground mt-2">
-              Sign in to access your dashboard
-            </p>
+      <div className="flex-1 flex items-center justify-center p-8 bg-white lg:rounded-l-[3rem] shadow-[-20px_0_50px_rgba(0,0,0,0.05)]">
+        <div className="w-full max-w-md space-y-10">
+          <div className="text-center space-y-2">
+            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">Welcome Back</h2>
+            <p className="text-slate-400 font-bold text-sm tracking-widest uppercase">Secure Portal Access</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-8">
             {/* ROLE SELECTION */}
-            <div className="space-y-3">
-              <Label>Select Your Role</Label>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            <div className="space-y-4">
+              <Label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">Select Identity</Label>
+              <div className="grid grid-cols-5 gap-3">
                 {roleOptions.map(({ role, icon: Icon }) => (
                   <button
                     key={role}
                     type="button"
                     onClick={() => setSelectedRole(role)}
                     className={cn(
-                      "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all",
+                      "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all duration-300 group",
                       selectedRole === role
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border hover:border-primary/50 text-muted-foreground"
+                        ? "border-indigo-600 bg-indigo-50 text-indigo-600 shadow-lg shadow-indigo-100 scale-105"
+                        : "border-slate-100 hover:border-indigo-200 text-slate-400"
                     )}
                   >
-                    <Icon className="h-5 w-5" />
-                    <span className="text-[10px] font-medium capitalize">
+                    <Icon className={cn("h-6 w-6 transition-transform group-hover:scale-110", selectedRole === role ? "fill-indigo-600/10" : "")} />
+                    <span className="text-[10px] font-black uppercase tracking-tighter">
                       {role}
                     </span>
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground text-center">
-                {
-                  roleOptions.find((r) => r.role === selectedRole)
-                    ?.description
-                }
-              </p>
             </div>
 
-            {/* EMAIL */}
+            {/* IDENTIFIER */}
             <div className="space-y-2">
-              <Label>Email Address</Label>
+              <Label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">
+                {selectedRole === "student" ? "Admission Number" : "Email Address"}
+              </Label>
               <Input
-                type="email"
-                placeholder="you@school.edu"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type={isEmailRole ? "email" : "text"}
+                placeholder={selectedRole === "student" ? "ADM-2025-001" : "name@school.edu"}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="h-14 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-all text-lg font-bold"
                 required
               />
             </div>
 
             {/* PASSWORD */}
             <div className="space-y-2">
-              <Label>Password</Label>
-              <div className="relative">
+              <div className="flex items-center justify-between ml-1">
+                <Label className="text-xs font-black uppercase text-slate-500 tracking-widest">Password</Label>
+                <button type="button" className="text-xs text-indigo-600 hover:text-indigo-800 font-black uppercase tracking-tighter">
+                  Reset?
+                </button>
+              </div>
+              <div className="relative group">
                 <Input
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="h-14 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-all pr-14 text-lg font-bold"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showPassword ? <EyeOff className="h-6 w-6" /> : <Eye className="h-6 w-6" />}
                 </button>
               </div>
             </div>
 
-            {error && (
-              <p className="text-sm text-red-600 text-center">{error}</p>
-            )}
-
-            <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
-              {isLoading
-                ? "Signing in..."
-                : `Sign in as ${roleLabels[selectedRole]}`}
+            <Button type="submit" size="lg" className="w-full h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shadow-2xl shadow-indigo-200 text-xl font-black italic tracking-tight transition-all active:scale-95" disabled={isLoading}>
+              {isLoading ? (
+                <div className="flex items-center gap-3">
+                   <div className="h-5 w-5 animate-spin rounded-full border-4 border-white/30 border-t-white" />
+                   VERIFYING...
+                </div>
+              ) : (
+                `SIGN IN AS ${selectedRole.toUpperCase()}`
+              )}
             </Button>
           </form>
+
+          <p className="text-center text-sm font-bold text-slate-400 uppercase tracking-tighter">
+            System Issue? <button className="text-indigo-600 hover:underline">Contact Tech Support</button>
+          </p>
         </div>
       </div>
     </div>
