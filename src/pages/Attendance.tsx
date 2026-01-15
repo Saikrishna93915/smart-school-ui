@@ -501,12 +501,12 @@ export default function Attendance() {
             return;
         }
 
-        setSaving(true);
+            setSaving(true);
         try {
             const payload = {
                 date: selectedDate,
-                className: selectedClass === 'all' ? undefined : selectedClass,
-                section: selectedSection === 'all' ? undefined : selectedSection,
+                className: selectedClass === 'all' ? '' : selectedClass,
+                section: selectedSection === 'all' ? '' : selectedSection,
                 attendance: studentsToSave.map(student => ({
                     studentId: student._id,
                     ...(activeSession === 'full-day' && {

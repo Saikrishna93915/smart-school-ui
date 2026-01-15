@@ -36,6 +36,16 @@ export interface StudentAddress {
 
 // --- Main Student Interface (Expected from GET /students/:id) ---
 export interface Student {
+    name: any;
+    fullName: any;
+    admissionNo: string;
+    studentId: any;
+    className: StudentClass;
+    parentName: string;
+    fatherName: any;
+    parentPhone: string;
+    contact: any;
+    id: string;
     _id: string;
     admissionNumber: string;
     // The complex nested structure used in Students.tsx

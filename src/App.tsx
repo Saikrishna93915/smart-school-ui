@@ -1,7 +1,6 @@
 // src/App.tsx
-
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -20,7 +19,6 @@ const Teachers = lazy(() => import('@/pages/Teachers'));
 const Attendance = lazy(() => import('@/pages/Attendance'));
 const Exams = lazy(() => import('@/pages/Exams'));
 const AIInsights = lazy(() => import('@/pages/AIInsights'));
-const Fees = lazy(() => import('@/pages/Fees'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Certificates = lazy(() => import('@/pages/Certificates'));
 const Communication = lazy(() => import('@/pages/Communication'));
@@ -33,10 +31,20 @@ const AdminDashboard = lazy(() => import('@/pages/dashboard/AdminDashboard'));
 const TeacherDashboard = lazy(() => import('@/pages/dashboard/TeacherDashboard'));
 const StudentDashboard = lazy(() => import('@/pages/dashboard/StudentDashboard'));
 
-// Exam-related components - REMOVED or COMMENTED OUT since they don't exist
-// const TakeExam = lazy(() => import('@/components/dashboard/Exams/TakeExam'));
-// const ExamResults = lazy(() => import('@/pages/dashboard/ExamResults'));
-// const CreateExam = lazy(() => import('@/pages/dashboard/CreateExam'));
+// Finance Management Pages
+const Collections = lazy(() => import('@/pages/finance/Collections'));
+const PaymentHistory = lazy(() => import('@/pages/finance/PaymentHistory'));
+const RecordPayment = lazy(() => import('@/pages/finance/RecordPayment'));
+const FinancialReports = lazy(() => import('@/pages/finance/FinancialReports'));
+const FeeDefaulters = lazy(() => import('@/pages/finance/FeeDefaulters'));
+
+// Fee Management Pages (For Parents/Students)
+
+const FeeStructure = lazy(() => import('@/pages/fees/Structure'));
+const CurrentDues = lazy(() => import('@/pages/fees/Dues'));
+const PaymentHistoryStudent = lazy(() => import('@/pages/fees/History'));
+const PayOnline = lazy(() => import('@/pages/fees/Pay'));
+const Receipts = lazy(() => import('@/pages/fees/Receipts'));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -56,7 +64,7 @@ const RoleBasedRoute = ({
   children, 
   allowedRoles 
 }: { 
-  children: React.ReactNode; 
+  children?: React.ReactNode; 
   allowedRoles: string[] 
 }) => {
   const userStr = localStorage.getItem('user');
@@ -66,7 +74,8 @@ const RoleBasedRoute = ({
     return <Navigate to="/dashboard" replace />;
   }
   
-  return <>{children}</>;
+  // If children are provided render them, otherwise render nested routes via Outlet
+  return <>{children ?? <Outlet />}</>;
 };
 
 const queryClient = new QueryClient({
@@ -134,39 +143,70 @@ function App() {
                     </RoleBasedRoute>
                   } />
                   
-                  {/* Exam Routes - Using the main Exams page for now */}
+                  {/* Exam Routes */}
                   <Route path="/exams" element={
                     <RoleBasedRoute allowedRoles={['admin', 'owner', 'teacher', 'student']}>
                       <Exams />
                     </RoleBasedRoute>
                   } />
-                  {/* Comment out non-existent routes for now */}
-                  {/* 
-                  <Route path="/exams/create" element={
-                    <RoleBasedRoute allowedRoles={['admin', 'owner', 'teacher']}>
-                      <CreateExam />
+
+                  {/* ===== FINANCE MANAGEMENT ROUTES (Admin/Accountant/Owner) ===== */}
+                  <Route path="/finance" element={
+                    <RoleBasedRoute allowedRoles={['admin', 'accountant', 'owner']} />
+                  }>
+                    <Route index element={<Navigate to="collections" replace />} />
+                    <Route path="collections" element={<Collections />} />
+                    <Route path="payment-history" element={<PaymentHistory />} />
+                    <Route path="record-payment" element={<RecordPayment />} />
+                    <Route path="reports" element={<FinancialReports />} />
+                    <Route path="defaulters" element={<FeeDefaulters />} />
+                  </Route>
+
+                  {/* ===== MY FEES ROUTES (Parent/Student) ===== */}
+                  <Route path="/fees" element={
+                    <RoleBasedRoute allowedRoles={['parent', 'student']}>
+                    
                     </RoleBasedRoute>
-                  } />
-                  <Route path="/exams/:examId/take" element={
-                    <RoleBasedRoute allowedRoles={['student']}>
-                      <TakeExam />
-                    </RoleBasedRoute>
-                  } />
-                  <Route path="/exams/results" element={
-                    <RoleBasedRoute allowedRoles={['admin', 'owner', 'teacher', 'student', 'parent']}>
-                      <ExamResults />
-                    </RoleBasedRoute>
-                  } />
-                  */}
+                  }>
+                    <Route index element={<Navigate to="structure" replace />} />
+                    <Route path="structure" element={<FeeStructure />} />
+                    <Route path="dues" element={<CurrentDues />} />
+                    <Route path="history" element={<PaymentHistoryStudent />} />
+                    <Route path="pay" element={<PayOnline />} />
+                    <Route path="receipts" element={<Receipts />} />
+                  </Route>
 
                   {/* Other Routes */}
-                  <Route path="/ai-insights" element={<AIInsights />} />
-                  <Route path="/fees" element={<Fees />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/certificates" element={<Certificates />} />
-                  <Route path="/communication" element={<Communication />} />
-                  <Route path="/syllabus" element={<Syllabus />} />
-                  <Route path="/transport" element={<Transport />} />
+                  <Route path="/ai-insights" element={
+                    <RoleBasedRoute allowedRoles={['admin', 'teacher', 'owner']}>
+                      <AIInsights />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/settings" element={
+                    <RoleBasedRoute allowedRoles={['admin', 'owner']}>
+                      <Settings />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/certificates" element={
+                    <RoleBasedRoute allowedRoles={['admin', 'student']}>
+                      <Certificates />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/communication" element={
+                    <RoleBasedRoute allowedRoles={['admin', 'teacher', 'parent', 'owner']}>
+                      <Communication />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/syllabus" element={
+                    <RoleBasedRoute allowedRoles={['admin', 'teacher', 'student']}>
+                      <Syllabus />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/transport" element={
+                    <RoleBasedRoute allowedRoles={['admin', 'parent', 'owner']}>
+                      <Transport />
+                    </RoleBasedRoute>
+                  } />
                 </Route>
 
                 {/* ---------- FALLBACK ---------- */}

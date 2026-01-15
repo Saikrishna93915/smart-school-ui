@@ -6,7 +6,8 @@ export type UserRole =
   | "owner"
   | "teacher"
   | "parent"
-  | "student";
+  | "student"
+  | "accountant"; // Added accountant role
 
 /* =========================
    USER (AUTH CONTEXT)
@@ -36,6 +37,7 @@ export const roleLabels: Record<UserRole, string> = {
   teacher: "Teacher",
   parent: "Parent",
   student: "Student",
+  accountant: "Accountant", // Added accountant label
 };
 
 /* =========================
@@ -47,4 +49,5 @@ export const roleColors: Record<UserRole, string> = {
   teacher: "bg-secondary text-secondary-foreground",
   parent: "bg-accent text-accent-foreground",
   student: "bg-success text-success-foreground",
+  accountant: "bg-blue-500 text-blue-50", // Added accountant color (blue theme)
 };
