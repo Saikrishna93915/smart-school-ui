@@ -32,25 +32,62 @@ import {
 } from 'lucide-react';
 import { FinanceService } from '@/Services/finance.service';
 import type { Student } from '@/types/student';
-
-// Import necessary UI components
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/components/ui/use-toast';
+
+// Define a universal student interface that handles both structures
+interface UniversalStudent {
+  // Direct properties (new structure)
+  _id: string;
+  id?: string;
+  admissionNumber: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  class?: {
+    className: string;
+    section: string;
+    academicYear?: string;
+  };
+  className?: string;
+  section?: string;
+  parents?: {
+    father: {
+      name: string;
+      phone: string;
+      email?: string;
+    };
+    mother?: {
+      name: string;
+      phone: string;
+      email?: string;
+    };
+  };
+  parentName?: string;
+  fatherName?: string;
+  phone?: string;
+  contact?: string;
+  email?: string;
+  
+  // Nested properties (old structure)
+  student?: {
+    firstName: string;
+    lastName: string;
+    name?: string;
+  };
+  // For old structure compatibility
+  admissionNo?: string;
+  fullName?: string;
+  parentPhone?: string;
+  [key: string]: any;
+}
 
 const RecordPayment = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<Student[]>([]);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [searchResults, setSearchResults] = useState<UniversalStudent[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<UniversalStudent | null>(null);
   const [studentFeeDetails, setStudentFeeDetails] = useState<any>(null);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,81 +104,151 @@ const RecordPayment = () => {
     gstin: "29AAACI0000A1Z5"
   };
 
+  // Helper function to extract student name from any structure
+  const getStudentName = (student: UniversalStudent | null): string => {
+    if (!student) return 'Unknown Student';
+    
+    // Try nested structure first (old format)
+    if (student.student?.firstName || student.student?.lastName) {
+      return `${student.student.firstName || ''} ${student.student.lastName || ''}`.trim();
+    }
+    
+    // Try direct properties (new format)
+    if (student.name) return student.name;
+    if (student.fullName) return student.fullName;
+    if (student.firstName || student.lastName) {
+      return `${student.firstName || ''} ${student.lastName || ''}`.trim();
+    }
+    
+    return 'Unknown Student';
+  };
+
+  // Helper function to extract class name
+  const getClassName = (student: UniversalStudent | null): string => {
+    if (!student) return 'N/A';
+    
+    // Try nested structure (old format)
+    if (student.class?.className) return student.class.className;
+    
+    // Try direct properties
+    if (student.className) return student.className;
+    
+    return 'N/A';
+  };
+
+  // Helper function to extract section
+  const getSection = (student: UniversalStudent | null): string => {
+    if (!student) return 'A';
+    
+    // Try nested structure (old format)
+    if (student.class?.section) return student.class.section;
+    
+    // Try direct properties
+    if (student.section) return student.section;
+    
+    return 'A';
+  };
+
+  // Helper function to extract parent name
+  const getParentName = (student: UniversalStudent | null): string => {
+    if (!student) return 'N/A';
+    
+    // Try nested structure (old format)
+    if (student.parents?.father?.name) return student.parents.father.name;
+    
+    // Try direct properties
+    if (student.parentName) return student.parentName;
+    if (student.fatherName) return student.fatherName;
+    
+    return 'N/A';
+  };
+
+  // Helper function to extract parent phone
+  const getParentPhone = (student: UniversalStudent | null): string => {
+    if (!student) return 'N/A';
+    
+    // Try nested structure (old format)
+    if (student.parents?.father?.phone) return student.parents.father.phone;
+    
+    // Try direct properties
+    if (student.phone) return student.phone;
+    if (student.contact) return student.contact;
+    if (student.parentPhone) return student.parentPhone;
+    
+    return 'N/A';
+  };
+
+  // Helper function to extract admission number
+  const getAdmissionNumber = (student: UniversalStudent | null): string => {
+    if (!student) return 'N/A';
+    return student.admissionNumber || student.admissionNo || 'N/A';
+  };
+
   // Search for students whenever search term changes
   useEffect(() => {
     const searchStudents = async () => {
       if (searchTerm.length >= 2) {
         setIsLoadingStudents(true);
         setError(null);
+        
         try {
-          console.log('🔍 Frontend: Searching for:', searchTerm);
+          console.log('🔍 Searching for:', searchTerm);
           
-          // DEBUG: Add direct fetch to see what API actually returns
-          try {
-            const debugResponse = await fetch(`http://localhost:5000/api/finance/students/search?query=${encodeURIComponent(searchTerm)}`);
-            const debugText = await debugResponse.text();
-            console.log('🔍 Direct fetch response (first 500 chars):', debugText.substring(0, 500));
-            
-            try {
-              const debugJson = JSON.parse(debugText);
-              console.log('🔍 Parsed JSON structure:', debugJson);
-              console.log('🔍 Is array?', Array.isArray(debugJson));
-              
-              if (debugJson && typeof debugJson === 'object') {
-                console.log('🔍 Object keys:', Object.keys(debugJson));
-                // Check each key for arrays
-                Object.keys(debugJson).forEach(key => {
-                  const value = debugJson[key];
-                  if (Array.isArray(value)) {
-                    console.log(`🔍 Found array in "${key}" with ${value.length} items`);
-                    if (value.length > 0) {
-                      console.log('🔍 First item:', value[0]);
-                    }
-                  }
-                });
-              }
-            } catch (parseErr) {
-              console.error('❌ Failed to parse JSON:', parseErr);
-            }
-          } catch (fetchErr) {
-            console.error('❌ Direct fetch failed:', fetchErr);
-          }
-          
-          // Now use the FinanceService
+          // Use the FinanceService
           const response = await FinanceService.searchStudents(searchTerm);
           console.log('🔍 FinanceService response:', response);
           
-          // Handle different response formats
-          let students: Student[] = [];
+          let students: UniversalStudent[] = [];
           
-          if (response.success) {
-            // If response.data exists
-            if (response.data) {
-              // Case 1: response.data is already an array
-              if (Array.isArray(response.data)) {
-                students = response.data;
-                console.log(`✅ Found ${students.length} students in response.data array`);
-              }
-              // Case 2: response.data is an object with nested array
-              else if (response.data && typeof response.data === 'object') {
-                // Look for any array property
-                const resData = response.data as Record<string, any>;
-                for (const key in resData) {
-                  if (Array.isArray(resData[key])) {
-                    students = resData[key];
-                    console.log(`✅ Found ${students.length} students in response.data.${key}`);
-                    break;
-                  }
+          if (response) {
+            // Handle different response structures
+            if (Array.isArray(response)) {
+              students = response;
+            } else if (response.data && Array.isArray(response.data)) {
+              students = response.data;
+            } else if (response.students && Array.isArray(response.students)) {
+              students = response.students;
+            } else if (response.success && response.data) {
+                if (Array.isArray(response.data)) {
+                  students = response.data;
+                } else if (response.data !== null && typeof response.data === 'object') {
+                  // Look for arrays in the data object (guard against null)
+                  Object.keys(response.data).forEach(key => {
+                    const val = (response.data as any)[key];
+                    if (Array.isArray(val)) {
+                      students = val;
+                    }
+                  });
                 }
               }
-            }
-          } else {
-            console.error('❌ API returned error:', response.error);
-            setError(response.error || 'Search failed');
           }
           
-          console.log(`✅ Final students array length: ${students.length}`);
+          // Ensure we have valid student objects
+          students = students.filter(student => 
+            student && typeof student === 'object' && 
+            (student._id || student.id || getAdmissionNumber(student) || getStudentName(student))
+          );
+          
+          console.log(`✅ Found ${students.length} students`);
+          
+          // Log first student structure for debugging
+          if (students.length > 0) {
+            console.log('📋 First student structure:', students[0]);
+            console.log('👤 Name extraction test:', {
+              nestedName: students[0].student?.firstName + ' ' + students[0].student?.lastName,
+              directName: students[0].name,
+              fullName: students[0].fullName,
+              firstName: students[0].firstName,
+              lastName: students[0].lastName,
+              finalName: getStudentName(students[0])
+            });
+          }
+          
           setSearchResults(students);
+          
+          if (students.length === 0 && searchTerm.length >= 2) {
+            setError(`No students found for "${searchTerm}"`);
+          }
           
         } catch (err: any) {
           console.error("❌ Failed to search students:", err);
@@ -152,6 +259,7 @@ const RecordPayment = () => {
         }
       } else {
         setSearchResults([]);
+        setError(null);
       }
     };
 
@@ -164,22 +272,36 @@ const RecordPayment = () => {
     const fetchFeeDetails = async () => {
       if (selectedStudent) {
         try {
-          console.log('💰 Fetching fee details for:', selectedStudent.admissionNumber);
-          const response = await FinanceService.getStudentFeeDetails(selectedStudent.admissionNumber);
+          const admissionNumber = getAdmissionNumber(selectedStudent);
+          console.log('💰 Fetching fee details for:', admissionNumber);
+          
+          const response = await FinanceService.getStudentFeeDetails(admissionNumber);
           console.log('💰 Fee details response:', response);
           
           let feeData = null;
           
-          if (response.success && response.data) {
-            // Extract fee data from response
-            feeData = response.data;
+          if (response && (response.success || response.data)) {
+            // Normalize response to the underlying data object (guard against ApiResponse wrappers)
+            const normalized: any = (response as any).data ?? response;
+            feeData = normalized;
             
-            // Set default amount from fee details
-            const totalDues = feeData.totalDues || 
-                             (feeData.data && feeData.data.totalDues) || 
-                             (feeData.feeSummary && feeData.feeSummary.totalDues);
+            // Extract total dues from various possible structures using safe any-based access
+            let totalDues = 0;
             
-            if (typeof totalDues === 'number' && totalDues > 0) {
+            const maybeTotal = normalized && (
+              (normalized.totalDues !== undefined && normalized.totalDues) ||
+              normalized.summary?.totalDue ||
+              normalized.feeStructure?.totalDue ||
+              normalized.feeSummary?.totalDue
+            );
+            
+            if (typeof maybeTotal === 'number' && maybeTotal > 0) {
+              totalDues = maybeTotal;
+            } else if (typeof maybeTotal === 'string' && !Number.isNaN(Number(maybeTotal))) {
+              totalDues = parseFloat(maybeTotal);
+            }
+            
+            if (totalDues > 0) {
               console.log(`💰 Setting default amount: ${totalDues}`);
               setFormData(prev => ({
                 ...prev,
@@ -254,25 +376,36 @@ const RecordPayment = () => {
     }));
   }, [formData.amount, formData.discount, formData.lateFee]);
 
-  const handleStudentSelect = async (student: Student) => {
+  const handleStudentSelect = async (student: UniversalStudent) => {
     console.log('👤 Student selected:', student);
+    console.log('📋 Student details:', {
+      name: getStudentName(student),
+      admissionNumber: getAdmissionNumber(student),
+      class: getClassName(student),
+      section: getSection(student),
+      parentName: getParentName(student),
+      parentPhone: getParentPhone(student)
+    });
+    
     setSelectedStudent(student);
     setFormData(prev => ({
       ...prev,
-      studentId: student._id,
-      admissionNumber: student.admissionNumber
+      studentId: student._id || student.id || '',
+      admissionNumber: getAdmissionNumber(student)
     }));
     setSearchTerm('');
     setSearchResults([]);
+    setError(null);
   };
 
   const handleFeeSelection = (feeType: string, checked: boolean) => {
     if (!studentFeeDetails) return;
 
-    // Find fee breakdown
+    // Find fee breakdown from different possible structures
     const feeBreakdown = studentFeeDetails.feeBreakdown || 
                         studentFeeDetails.data?.feeBreakdown || 
                         studentFeeDetails.fees || 
+                        studentFeeDetails.feeStructure?.breakdown ||
                         [];
     
     const fee = feeBreakdown.find((f: any) => f.type === feeType || f.name === feeType);
@@ -316,13 +449,14 @@ const RecordPayment = () => {
     try {
       // Prepare payment data
       const paymentData = {
-        studentId: selectedStudent._id,
-        admissionNumber: selectedStudent.admissionNumber,
-        studentName: `${selectedStudent.student.firstName} ${selectedStudent.student.lastName}`,
-        className: `${selectedStudent.class.className}-${selectedStudent.class.section}`,
-        parentName: selectedStudent.parents.father.name,
-        parentPhone: selectedStudent.parents.father.phone,
-        parentEmail: selectedStudent.parents.father.email || '',
+        studentId: selectedStudent._id || selectedStudent.id,
+        admissionNumber: getAdmissionNumber(selectedStudent),
+        studentName: getStudentName(selectedStudent),
+        className: getClassName(selectedStudent),
+        section: getSection(selectedStudent),
+        parentName: getParentName(selectedStudent),
+        parentPhone: getParentPhone(selectedStudent),
+        parentEmail: selectedStudent.parents?.father?.email || selectedStudent.email || '',
         
         // Payment details
         paymentDate: formData.paymentDate,
@@ -361,10 +495,18 @@ const RecordPayment = () => {
       console.log('💸 Payment response:', response);
       
       // Extract receipt number
-      const receiptNumber = response.data?.receiptNumber ||
-                           response.receiptNumber ||
-                           (response as any).data?.data?.receiptNumber ||
-                           `REC-${Date.now().toString().slice(-8)}`;
+      let receiptNumber = `REC-${Date.now().toString().slice(-8)}`;
+      
+      if (response) {
+        if (response.success && response.data) {
+          receiptNumber = response.data.receiptNumber || 
+                         response.data.receiptNo || 
+                         response.receiptNumber ||
+                         receiptNumber;
+        } else {
+          receiptNumber = response.receiptNumber || receiptNumber;
+        }
+      }
       
       // Show success message with receipt details
       toast({
@@ -425,6 +567,13 @@ const RecordPayment = () => {
   const generateAndPrintReceipt = (receiptNumber: string) => {
     if (!selectedStudent) return;
     
+    const studentName = getStudentName(selectedStudent);
+    const className = getClassName(selectedStudent);
+    const section = getSection(selectedStudent);
+    const parentName = getParentName(selectedStudent);
+    const parentPhone = getParentPhone(selectedStudent);
+    const admissionNumber = getAdmissionNumber(selectedStudent);
+    
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(`
@@ -482,11 +631,11 @@ const RecordPayment = () => {
                 <div class="section">
                   <div class="section-title">Student Details</div>
                   <div class="details-grid">
-                    <div class="detail-item"><span class="detail-label">Student Name:</span> ${selectedStudent.student.firstName} ${selectedStudent.student.lastName}</div>
-                    <div class="detail-item"><span class="detail-label">Admission No:</span> ${selectedStudent.admissionNumber}</div>
-                    <div class="detail-item"><span class="detail-label">Class:</span> ${selectedStudent.class.className} - ${selectedStudent.class.section}</div>
-                    <div class="detail-item"><span class="detail-label">Parent Name:</span> ${selectedStudent.parents.father.name}</div>
-                    <div class="detail-item"><span class="detail-label">Parent Contact:</span> ${selectedStudent.parents.father.phone}</div>
+                    <div class="detail-item"><span class="detail-label">Student Name:</span> ${studentName}</div>
+                    <div class="detail-item"><span class="detail-label">Admission No:</span> ${admissionNumber}</div>
+                    <div class="detail-item"><span class="detail-label">Class:</span> ${className} - ${section}</div>
+                    <div class="detail-item"><span class="detail-label">Parent Name:</span> ${parentName}</div>
+                    <div class="detail-item"><span class="detail-label">Parent Contact:</span> ${parentPhone}</div>
                   </div>
                 </div>
                 
@@ -757,9 +906,6 @@ const RecordPayment = () => {
         <div className="text-center py-4 text-muted-foreground bg-muted/30 p-3 rounded">
           <AlertCircle className="h-5 w-5 inline-block mr-2" />
           <span className="text-sm">No students found for "{searchTerm}"</span>
-          <div className="text-xs mt-1 text-muted-foreground">
-            Check console for API response details
-          </div>
         </div>
       );
     }
@@ -772,33 +918,16 @@ const RecordPayment = () => {
           </div>
           <div className="p-2">
             {searchResults.map((student, index) => {
-              // Debug log for each student
-              console.log(`Student ${index}:`, student);
-              
-              // Safely extract student data
-              const studentName = student.student?.firstName 
-                ? `${student.student.firstName} ${student.student.lastName || ''}`
-                : student.name || student.fullName || 'Unknown Student';
-              
-              const admissionNumber = student.admissionNumber || student.admissionNo || student.studentId || 'N/A';
-              
-              const className = student.class?.className
-                ? `${student.class.className.replace(' Class', '')}-${student.class.section || 'A'}`
-                : student.className || student.class || 'N/A';
-              
-              const parentName = student.parents?.father?.name || 
-                               student.parentName || 
-                               student.fatherName || 
-                               'N/A';
-              
-              const parentPhone = student.parents?.father?.phone || 
-                                student.parentPhone || 
-                                student.contact || 
-                                'N/A';
+              const studentName = getStudentName(student);
+              const admissionNumber = getAdmissionNumber(student);
+              const className = getClassName(student);
+              const section = getSection(student);
+              const parentName = getParentName(student);
+              const parentPhone = getParentPhone(student);
               
               const initials = studentName
                 .split(' ')
-                .map((n: any[]) => n[0])
+                .map(n => n[0])
                 .join('')
                 .toUpperCase()
                 .substring(0, 2) || 'ST';
@@ -806,24 +935,24 @@ const RecordPayment = () => {
               return (
                 <div
                   key={student._id || student.id || index}
-                  className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                  className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors duration-150"
                   onClick={() => handleStudentSelect(student)}
                 >
                   <Avatar className="h-10 w-10 border">
-                    <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                    <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{studentName}</div>
+                    <div className="font-medium truncate text-gray-900">{studentName}</div>
                     <div className="text-xs text-gray-500 truncate">
-                      Adm: {admissionNumber} • Class: {className}
+                      Adm: {admissionNumber} • Class: {className}-{section}
                     </div>
                     <div className="text-xs text-gray-500 truncate">
                       Parent: {parentName} • {parentPhone}
                     </div>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                  <ChevronRight className="h-4 w-4 text-gray-400 flex-shrink-0" />
                 </div>
               );
             })}
@@ -838,6 +967,28 @@ const RecordPayment = () => {
   const renderStep = () => {
     switch (step) {
       case 1:
+        const studentName = selectedStudent ? getStudentName(selectedStudent) : '';
+        const className = selectedStudent ? getClassName(selectedStudent) : '';
+        const section = selectedStudent ? getSection(selectedStudent) : '';
+        const parentName = selectedStudent ? getParentName(selectedStudent) : '';
+        const parentPhone = selectedStudent ? getParentPhone(selectedStudent) : '';
+        const admissionNumber = selectedStudent ? getAdmissionNumber(selectedStudent) : '';
+        
+        // Extract mother details if available
+        const motherName = selectedStudent?.parents?.mother?.name || '';
+        const motherPhone = selectedStudent?.parents?.mother?.phone || '';
+        
+        // Get total dues from fee details
+        const totalDues = studentFeeDetails?.totalDues || 
+                         studentFeeDetails?.summary?.totalDue || 
+                         studentFeeDetails?.feeStructure?.totalDue || 
+                         0;
+        
+        // Get fee breakdown
+        const feeBreakdown = studentFeeDetails?.feeBreakdown || 
+                           studentFeeDetails?.feeStructure?.breakdown || 
+                           [];
+        
         return (
           <div className="space-y-6">
             <div>
@@ -856,10 +1007,11 @@ const RecordPayment = () => {
                     className="pl-10"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    autoFocus
                   />
                 </div>
                 
-                <div className="relative">
+                <div className="relative mt-1">
                   {renderStudentSearchResults()}
                 </div>
               </div>
@@ -870,16 +1022,21 @@ const RecordPayment = () => {
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-14 w-14 border-2 border-green-200">
-                          <AvatarFallback className="bg-green-100 text-green-700 text-lg">
-                            {`${selectedStudent.student.firstName[0]}${selectedStudent.student.lastName[0]}`}
+                          <AvatarFallback className="bg-green-100 text-green-700 text-lg font-semibold">
+                            {studentName
+                              .split(' ')
+                              .map(n => n[0])
+                              .join('')
+                              .toUpperCase()
+                              .substring(0, 2)}
                           </AvatarFallback>
                         </Avatar>
                         <div>
                           <div className="font-bold text-xl text-green-900">
-                            {selectedStudent.student.firstName} {selectedStudent.student.lastName}
+                            {studentName}
                           </div>
                           <div className="text-sm text-green-700">
-                            Admission No: {selectedStudent.admissionNumber} • Class: {selectedStudent.class.className} - {selectedStudent.class.section}
+                            Admission No: {admissionNumber} • Class: {className} - {section}
                           </div>
                         </div>
                       </div>
@@ -889,6 +1046,7 @@ const RecordPayment = () => {
                         onClick={() => {
                           setSelectedStudent(null);
                           setStudentFeeDetails(null);
+                          setFormData(prev => ({ ...prev, amount: '' }));
                         }}
                         className="border-green-300 text-green-700 hover:bg-green-100"
                       >
@@ -896,42 +1054,47 @@ const RecordPayment = () => {
                       </Button>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
                         <span className="text-gray-600">Father:</span>
-                        <div className="font-medium">{selectedStudent.parents.father.name}</div>
-                        <div className="text-gray-500">{selectedStudent.parents.father.phone}</div>
+                        <div className="font-medium">{parentName}</div>
+                        <div className="text-gray-500">{parentPhone}</div>
                       </div>
-                      <div>
-                        <span className="text-gray-600">Mother:</span>
-                        <div className="font-medium">{selectedStudent.parents.mother.name}</div>
-                        <div className="text-gray-500">{selectedStudent.parents.mother.phone}</div>
-                      </div>
+                      {motherName && (
+                        <div>
+                          <span className="text-gray-600">Mother:</span>
+                          <div className="font-medium">{motherName}</div>
+                          <div className="text-gray-500">{motherPhone}</div>
+                        </div>
+                      )}
                     </div>
                     
                     {studentFeeDetails && (
                       <div className="mt-6 pt-6 border-t border-green-200">
                         <div className="font-bold text-lg mb-3 text-green-800">Fee Details</div>
                         <div className="space-y-3">
-                          {studentFeeDetails.feeBreakdown?.map((fee: any, index: number) => (
+                          {feeBreakdown.map((fee: any, index: number) => (
                             <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-green-100">
                               <div className="flex items-center gap-3">
                                 <Checkbox
                                   id={`fee-${index}`}
-                                  checked={formData.feesPaid.some(f => f.type === fee.type || f.name === fee.type)}
+                                  checked={formData.feesPaid.some(f => f.type === (fee.type || fee.name) || f.name === (fee.type || fee.name))}
                                   onCheckedChange={(checked) => handleFeeSelection(fee.type || fee.name, checked as boolean)}
                                 />
                                 <Label htmlFor={`fee-${index}`} className="cursor-pointer">
-                                  <div className="font-medium">{fee.type || fee.name}</div>
-                                  <div className="text-sm text-gray-500">Due: {fee.dueDate || 'N/A'}</div>
+                                  <div className="font-medium">{fee.type || fee.name || 'Fee'}</div>
+                                  {fee.dueDate && <div className="text-sm text-gray-500">Due: {fee.dueDate}</div>}
                                 </Label>
                               </div>
                               <div className="font-bold text-green-700">₹{(fee.amount || fee.value || 0).toLocaleString()}</div>
                             </div>
                           ))}
+                          
                           <div className="flex justify-between p-3 border-t pt-4 font-bold text-lg bg-white rounded-lg border border-green-100">
                             <div>Total Dues:</div>
-                            <div className="text-amber-600">₹{(studentFeeDetails.totalDues || 0).toLocaleString()}</div>
+                            <div className="text-amber-600">
+                              ₹{totalDues.toLocaleString()}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1144,6 +1307,13 @@ const RecordPayment = () => {
         );
 
       case 3:
+        const reviewStudentName = selectedStudent ? getStudentName(selectedStudent) : '';
+        const reviewClassName = selectedStudent ? getClassName(selectedStudent) : '';
+        const reviewSection = selectedStudent ? getSection(selectedStudent) : '';
+        const reviewParentName = selectedStudent ? getParentName(selectedStudent) : '';
+        const reviewParentPhone = selectedStudent ? getParentPhone(selectedStudent) : '';
+        const reviewParentEmail = selectedStudent?.parents?.father?.email || selectedStudent?.email || '';
+        
         return (
           <div className="space-y-6">
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
@@ -1170,21 +1340,19 @@ const RecordPayment = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <div className="text-sm text-gray-500">Student Name</div>
-                      <div className="font-bold text-lg">
-                        {selectedStudent?.student.firstName} {selectedStudent?.student.lastName}
-                      </div>
+                      <div className="font-bold text-lg">{reviewStudentName}</div>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <div className="text-sm text-gray-500">Admission Number</div>
-                      <div className="font-bold text-lg">{selectedStudent?.admissionNumber}</div>
+                      <div className="font-bold text-lg">{getAdmissionNumber(selectedStudent)}</div>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <div className="text-sm text-gray-500">Class & Section</div>
-                      <div className="font-bold text-lg">{selectedStudent?.class.className} - {selectedStudent?.class.section}</div>
+                      <div className="font-bold text-lg">{reviewClassName} - {reviewSection}</div>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <div className="text-sm text-gray-500">Parent</div>
-                      <div className="font-bold text-lg">{selectedStudent?.parents.father.name}</div>
+                      <div className="font-bold text-lg">{reviewParentName}</div>
                     </div>
                   </div>
                 </div>
@@ -1290,7 +1458,7 @@ const RecordPayment = () => {
                     <div>
                       <Label htmlFor="sendReceipt" className="font-medium cursor-pointer">Email Receipt</Label>
                       <div className="text-sm text-gray-500 mt-1">
-                        Send to {selectedStudent?.parents.father.email || selectedStudent?.parents.mother.email || 'parent@email.com'}
+                        Send to {reviewParentEmail || 'parent@email.com'}
                       </div>
                     </div>
                     <Mail className="ml-auto h-5 w-5 text-gray-400" />
@@ -1305,7 +1473,7 @@ const RecordPayment = () => {
                     <div>
                       <Label htmlFor="sendSMS" className="font-medium cursor-pointer">Send SMS</Label>
                       <div className="text-sm text-gray-500 mt-1">
-                        To {selectedStudent?.parents.father.phone || selectedStudent?.parents.mother.phone}
+                        To {reviewParentPhone}
                       </div>
                     </div>
                     <FileText className="ml-auto h-5 w-5 text-gray-400" />

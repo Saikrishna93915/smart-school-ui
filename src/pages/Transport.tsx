@@ -1,8 +1,9 @@
-// src/pages/Transport.tsx - COMPLETE WORKING VERSION (NO EXTERNAL LIBRARIES)
-import { useState } from 'react';
+// src/pages/Transport.tsx - COMPLETE FIXED VERSION
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -19,7 +20,26 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Bus,
   MapPin,
@@ -42,24 +62,35 @@ import {
   TrendingDown,
   BarChart,
   FileSpreadsheet,
-  Eye
+  Eye,
+  Route,
+  AlertCircle,
+  Settings,
+  User,
+  Calendar,
+  Bell,
+  Loader2,
+  Car,
+  Shield,
+  Battery,
+  Thermometer,
+  Gauge,
+  ClipboardList,
+  Filter,
+  Search,
+  Edit,
+  Trash2,
+  Star,
+  Phone,
+  Mail,
+  Home,
+  Truck,
+  Zap,
+  Database,
+  Activity,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import {
   BarChart as RechartsBarChart,
   Bar,
@@ -69,38 +100,120 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  PieChart,
+  PieChart as RechartsPieChart,
   Pie,
   Cell,
   LineChart,
   Line,
+  Area,
+  AreaChart
 } from 'recharts';
 import { toast } from '@/hooks/use-toast';
+import {
+  vehicleApi,
+  driverApi,
+  routeApi,
+  maintenanceApi,
+  fuelLogApi,
+  dashboardApi,
+  socketService
+} from '@/Services/transportService';
 
-// Mock Data Types
+// Types - UPDATED to match API responses
 interface Vehicle {
-  id: number;
+  _id: string;
   vehicleNo: string;
-  driver: string;
-  driverAvatar?: string;
-  route: string;
+  registrationNo: string;
+  make: string;
+  model: string;
+  year: number;
+  color: string;
   capacity: number;
+  fuelType: 'petrol' | 'diesel' | 'cng' | 'electric';
+  currentFuel: number;
   status: 'active' | 'maintenance' | 'inactive' | 'on-route';
-  fuel: number;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    address: string;
+  };
+  currentDriver?: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email: string;
+  };
+  currentRoute?: {
+    _id: string;
+    routeNo: string;
+    name: string;
+    zone: string;
+  };
   lastService: string;
   nextService: string;
-  currentLocation?: string;
-  speed?: number;
-  estimatedRepairTime?: string;
+  createdAt: string;
 }
 
-interface MaintenanceAlert {
-  id: number;
-  vehicle: string;
-  issue: string;
-  date: string;
-  priority: 'high' | 'medium' | 'low';
-  estimatedCost?: number;
+interface Driver {
+  _id: string;
+  employeeId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  licenseNo: string;
+  status: 'active' | 'on-leave' | 'suspended' | 'inactive';
+  assignedVehicle?: {
+    _id: string;
+    vehicleNo: string;
+    model: string;
+    capacity: number;
+  };
+  rating?: number;
+  totalTrips?: number;
+}
+
+interface Route {
+  _id: string;
+  routeNo: string;
+  name: string;
+  zone: 'north' | 'south' | 'east' | 'west' | 'central';
+  startPoint: string;
+  endPoint: string;
+  totalDistance: number;
+  estimatedTime: number;
+  status: 'active' | 'inactive' | 'temporary-closed';
+  monthlyStudents: number;
+  monthlyEfficiency: number;
+  assignedVehicle?: {
+    _id: string;
+    vehicleNo: string;
+  };
+  assignedDriver?: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+  };
+}
+
+interface Maintenance {
+  _id: string;
+  maintenanceId: string;
+  vehicle: {
+    _id: string;
+    vehicleNo: string;
+    make: string;
+    model: string;
+  };
+  issueDescription: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
+  estimatedCost: number;
+  actualCost?: number;
+  scheduledDate: string;
+  completionDate?: string;
+  reportedBy?: string;
 }
 
 interface StatData {
@@ -112,749 +225,679 @@ interface StatData {
   description: string;
 }
 
-// Mock Data
-const initialVehicles: Vehicle[] = [
-  { id: 1, vehicleNo: 'KA-01-AB-1234', driver: 'Ramesh Singh', driverAvatar: '/avatars/01.png', route: 'Route 1 (North Zone)', capacity: 50, status: 'on-route', fuel: 75, lastService: '2024-01-15', nextService: '2024-02-15', currentLocation: 'Near City Center', speed: 45 },
-  { id: 2, vehicleNo: 'KA-01-AB-5678', driver: 'Suresh Kumar', driverAvatar: '/avatars/02.png', route: 'Route 2 (East Zone)', capacity: 40, status: 'active', fuel: 60, lastService: '2024-01-20', nextService: '2024-02-20', currentLocation: 'East Bus Depot' },
-  { id: 3, vehicleNo: 'KA-01-AB-9012', driver: 'Rajesh Yadav', driverAvatar: '/avatars/03.png', route: 'Route 3 (West Zone)', capacity: 50, status: 'maintenance', fuel: 20, lastService: '2024-01-05', nextService: '2024-02-05', estimatedRepairTime: '3 days' },
-  { id: 4, vehicleNo: 'KA-01-AB-3456', driver: 'Vikram Malhotra', driverAvatar: '/avatars/04.png', route: 'Route 4 (South Zone)', capacity: 35, status: 'active', fuel: 90, lastService: '2024-01-25', nextService: '2024-02-25' },
-  { id: 5, vehicleNo: 'KA-01-AB-7890', driver: 'Amit Patel', driverAvatar: '/avatars/05.png', route: 'Route 5 (Central Zone)', capacity: 60, status: 'inactive', fuel: 45, lastService: '2024-01-10', nextService: '2024-02-10' },
-];
-
-const maintenanceAlertsData: MaintenanceAlert[] = [
-  { id: 1, vehicle: 'KA-01-AB-9012', issue: 'Engine Overheating', date: 'Due Today', priority: 'high', estimatedCost: 12000 },
-  { id: 2, vehicle: 'KA-01-AB-7890', issue: 'Oil Change Required', date: 'Due Tomorrow', priority: 'medium', estimatedCost: 3500 },
-  { id: 3, vehicle: 'KA-01-AB-1234', issue: 'Brake Pad Replacement', date: 'In 3 Days', priority: 'medium', estimatedCost: 8000 },
-  { id: 4, vehicle: 'KA-01-GH-9012', issue: 'Tyre Pressure Low', date: 'In 5 Days', priority: 'low', estimatedCost: 2000 },
-];
-
-const routeData = [
-  { route: 'R-01', capacity: 50, occupied: 45, efficiency: 90 },
-  { route: 'R-02', capacity: 40, occupied: 38, efficiency: 95 },
-  { route: 'R-03', capacity: 50, occupied: 42, efficiency: 84 },
-  { route: 'R-04', capacity: 35, occupied: 20, efficiency: 57 },
-  { route: 'R-05', capacity: 60, occupied: 55, efficiency: 92 },
-  { route: 'R-06', capacity: 40, occupied: 35, efficiency: 88 },
-];
-
-const fuelConsumptionData = [
-  { month: 'Jan', consumption: 450, cost: 35000 },
-  { month: 'Feb', consumption: 420, cost: 32000 },
-  { month: 'Mar', consumption: 480, cost: 37000 },
-  { month: 'Apr', consumption: 410, cost: 31500 },
-  { month: 'May', consumption: 460, cost: 35500 },
-  { month: 'Jun', consumption: 430, cost: 33000 },
-];
-
-const statusData = [
-  { name: 'Active', value: 5, color: '#10b981' },
-  { name: 'On Route', value: 2, color: '#3b82f6' },
-  { name: 'Maintenance', value: 2, color: '#f59e0b' },
-  { name: 'Inactive', value: 1, color: '#ef4444' },
-];
-
 const Transport = () => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
-  const [isLoading, setIsLoading] = useState(false);
+  // State
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [maintenanceAlerts, setMaintenanceAlerts] = useState<Maintenance[]>([]);
+  const [isLoading, setIsLoading] = useState({
+    vehicles: false,
+    drivers: false,
+    routes: false,
+    maintenance: false,
+    dashboard: false
+  });
   const [activeTab, setActiveTab] = useState('overview');
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
-  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
-  const [newVehicle, setNewVehicle] = useState({
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
+  
+  // New vehicle form state
+  type NewVehicleForm = {
+    vehicleNo: string;
+    registrationNo: string;
+    make: string;
+    model: string;
+    year: number;
+    color: string;
+    capacity: number;
+    fuelType: 'petrol' | 'diesel' | 'cng' | 'electric';
+    currentFuel: number;
+    status: 'active' | 'maintenance' | 'inactive' | 'on-route';
+    lastService: string;
+    nextService: string;
+  };
+  
+  const [newVehicle, setNewVehicle] = useState<NewVehicleForm>({
     vehicleNo: '',
-    driver: '',
-    route: '',
+    registrationNo: '',
+    make: '',
+    model: '',
+    year: new Date().getFullYear(),
+    color: '',
     capacity: 50,
-    fuel: 100,
+    fuelType: 'diesel',
+    currentFuel: 100,
+    status: 'active',
+    lastService: new Date().toISOString().split('T')[0],
+    nextService: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
   });
 
-  const stats: StatData[] = [
-    { title: 'Total Fleet', value: '12', change: 2.5, isPositive: true, icon: Bus, description: 'Active vehicles' },
-    { title: 'Active Routes', value: '8', change: 1.2, isPositive: true, icon: MapPin, description: 'Covering 4 zones' },
-    { title: 'Students Transported', value: '450', change: 5.4, isPositive: true, icon: Users, description: 'Daily average' },
-    { title: 'Fuel Efficiency', value: '85%', change: -1.2, isPositive: false, icon: Fuel, description: 'Monthly average' },
-    { title: 'On-time Performance', value: '92%', change: 2.1, isPositive: true, icon: Clock, description: 'This month' },
-    { title: 'Maintenance Cost', value: '₹85,000', change: -3.4, isPositive: false, icon: Wrench, description: 'Monthly spend' },
-  ];
+  // Dashboard data
+  const [vehicleStats, setVehicleStats] = useState<any>(null);
+  const [routeEfficiencyData, setRouteEfficiencyData] = useState<any[]>([]);
+  const [fuelConsumptionData, setFuelConsumptionData] = useState<any[]>([]);
+  const [statusDistribution, setStatusDistribution] = useState<any[]>([]);
 
-  // =================== PRINT/PDF FUNCTIONS ===================
-  
-  const generateAndPrintReport = (reportType: 'transport' | 'fuel' | 'maintenance') => {
+  // Stats for dashboard
+  const [stats, setStats] = useState<StatData[]>([
+    { title: 'Total Fleet', value: '0', change: 0, isPositive: true, icon: Bus, description: 'Active vehicles' },
+    { title: 'Active Routes', value: '0', change: 0, isPositive: true, icon: MapPin, description: 'Covering all zones' },
+    { title: 'Students Transported', value: '0', change: 0, isPositive: true, icon: Users, description: 'Daily average' },
+    { title: 'Fuel Efficiency', value: '0%', change: 0, isPositive: true, icon: Fuel, description: 'Monthly average' },
+    { title: 'On-time Performance', value: '0%', change: 0, isPositive: true, icon: Clock, description: 'This month' },
+    { title: 'Maintenance Cost', value: '₹0', change: 0, isPositive: true, icon: Wrench, description: 'Monthly spend' },
+  ]);
+
+  // =================== API CALLS - FIXED ===================
+
+  const fetchVehicles = useCallback(async () => {
     try {
-      setIsLoading(true);
+      setIsLoading(prev => ({ ...prev, vehicles: true }));
+      const response = await vehicleApi.getAllVehicles();
       
-      toast({
-        title: "Preparing Report",
-        description: "Generating report for printing...",
-      });
-
-      // Create HTML content for the report
-      const reportHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Smart School Transport Report</title>
-          <style>
-            @media print {
-              @page {
-                size: A4;
-                margin: 1cm;
-              }
-            }
-            body {
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-              margin: 0;
-              padding: 20px;
-              color: #333;
-              line-height: 1.6;
-            }
-            .header {
-              text-align: center;
-              margin-bottom: 30px;
-              padding-bottom: 20px;
-              border-bottom: 3px solid #2563eb;
-            }
-            h1 {
-              color: #1e40af;
-              margin: 0 0 10px 0;
-              font-size: 28px;
-            }
-            .subtitle {
-              color: #6b7280;
-              font-size: 14px;
-              margin: 5px 0;
-            }
-            .report-info {
-              background: #f8fafc;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-              border-left: 4px solid #2563eb;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 20px 0;
-              font-size: 14px;
-            }
-            th {
-              background-color: #3b82f6;
-              color: white;
-              padding: 12px 15px;
-              text-align: left;
-              font-weight: 600;
-            }
-            td {
-              border: 1px solid #e5e7eb;
-              padding: 10px 15px;
-            }
-            tr:nth-child(even) {
-              background-color: #f9fafb;
-            }
-            .stats-container {
-              display: grid;
-              grid-template-columns: repeat(3, 1fr);
-              gap: 15px;
-              margin: 25px 0;
-            }
-            .stat-box {
-              border: 1px solid #e5e7eb;
-              border-radius: 8px;
-              padding: 15px;
-              text-align: center;
-              background: white;
-              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            }
-            .stat-value {
-              font-size: 24px;
-              font-weight: bold;
-              color: #1e40af;
-              margin: 5px 0;
-            }
-            .stat-label {
-              color: #6b7280;
-              font-size: 13px;
-              margin-top: 5px;
-            }
-            .footer {
-              margin-top: 40px;
-              padding-top: 20px;
-              border-top: 1px solid #e5e7eb;
-              text-align: center;
-              color: #9ca3af;
-              font-size: 12px;
-            }
-            .priority-high { color: #dc2626; font-weight: bold; }
-            .priority-medium { color: #d97706; font-weight: bold; }
-            .priority-low { color: #059669; font-weight: bold; }
-            .status-active { color: #059669; }
-            .status-maintenance { color: #d97706; }
-            .status-inactive { color: #dc2626; }
-            .status-on-route { color: #2563eb; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>📊 Smart School Transport Report</h1>
-            <div class="subtitle">Report Type: ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report</div>
-            <div class="subtitle">Generated: ${new Date().toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}</div>
-          </div>
-          
-          <div class="report-info">
-            <strong>Report Summary:</strong> This report contains detailed information about the school's transport management system.
-            ${reportType === 'transport' ? 'Includes vehicle fleet details and performance metrics.' : ''}
-            ${reportType === 'fuel' ? 'Includes fuel consumption analysis and cost tracking.' : ''}
-            ${reportType === 'maintenance' ? 'Includes maintenance alerts and scheduled repairs.' : ''}
-          </div>
-          
-          ${getReportContent(reportType)}
-          
-          <div class="footer">
-            <p>© ${new Date().getFullYear()} Smart School Management System | Transport Department</p>
-            <p>Confidential - For internal use only</p>
-            <p>Page 1 of 1</p>
-          </div>
-          
-          <script>
-            // Auto-print after loading
-            window.onload = function() {
-              window.print();
-              setTimeout(() => {
-                window.close();
-              }, 1000);
-            };
-          </script>
-        </body>
-        </html>
-      `;
-
-      // Open report in new window
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(reportHTML);
-        printWindow.document.close();
-        
-        // Fallback in case auto-print doesn't work
-        setTimeout(() => {
-          printWindow.print();
-        }, 1000);
+      console.log('Vehicles API Response:', response); // Debug
+      
+      // FIX: Handle both response structures
+      if (response.success) {
+        // Check if data is nested (pagination) or direct array
+        const vehiclesData = response.data?.data || response.data || [];
+        setVehicles(vehiclesData);
       }
-
-      toast({
-        title: "Report Ready",
-        description: "Report opened for printing/saving as PDF",
-      });
-      
-    } catch (error) {
-      console.error('Report generation error:', error);
+    } catch (error: any) {
+      console.error('Error fetching vehicles:', error);
       toast({
         title: "Error",
-        description: "Failed to generate report. Please try again.",
+        description: error.response?.data?.message || "Failed to fetch vehicles",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsLoading(prev => ({ ...prev, vehicles: false }));
     }
-  };
+  }, []);
 
-  const getReportContent = (reportType: string) => {
-    switch(reportType) {
-      case 'transport':
-        return `
-          <div class="stats-container">
-            ${stats.map(stat => `
-              <div class="stat-box">
-                <div class="stat-value">${stat.value}</div>
-                <div class="stat-label">${stat.title}</div>
-                <small>${stat.description}</small>
-              </div>
-            `).join('')}
-          </div>
-          
-          <h2>Vehicle Fleet Details</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Vehicle No.</th>
-                <th>Driver</th>
-                <th>Route</th>
-                <th>Capacity</th>
-                <th>Status</th>
-                <th>Fuel</th>
-                <th>Last Service</th>
-                <th>Next Service</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${vehicles.map(vehicle => `
-                <tr>
-                  <td><strong>${vehicle.vehicleNo}</strong></td>
-                  <td>${vehicle.driver}</td>
-                  <td>${vehicle.route}</td>
-                  <td>${vehicle.capacity} seats</td>
-                  <td class="status-${vehicle.status}">${vehicle.status.charAt(0).toUpperCase() + vehicle.status.slice(1)}</td>
-                  <td>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <div style="width: 60px; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
-                        <div style="width: ${vehicle.fuel}%; height: 100%; background: ${vehicle.fuel > 70 ? '#10b981' : vehicle.fuel > 30 ? '#f59e0b' : '#ef4444'};"></div>
-                      </div>
-                      ${vehicle.fuel}%
-                    </div>
-                  </td>
-                  <td>${vehicle.lastService}</td>
-                  <td>${vehicle.nextService}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        `;
-        
-      case 'fuel':
-        return `
-          <h2>Fuel Consumption Analysis</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Month</th>
-                <th>Consumption (Liters)</th>
-                <th>Total Cost (₹)</th>
-                <th>Cost per Liter</th>
-                <th>Monthly Change</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${fuelConsumptionData.map((item, index) => {
-                const prevCost = index > 0 ? fuelConsumptionData[index - 1].cost : item.cost;
-                const change = ((item.cost - prevCost) / prevCost * 100).toFixed(1);
-                const isIncrease = item.cost > prevCost;
-                return `
-                  <tr>
-                    <td><strong>${item.month}</strong></td>
-                    <td>${item.consumption.toLocaleString()} L</td>
-                    <td>₹${item.cost.toLocaleString()}</td>
-                    <td>₹${Math.round(item.cost / item.consumption)}</td>
-                    <td style="color: ${isIncrease ? '#dc2626' : '#059669'}">
-                      ${isIncrease ? '↑' : '↓'} ${Math.abs(parseFloat(change))}%
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-          
-          <div style="margin-top: 30px; padding: 20px; background: #f0f9ff; border-radius: 8px;">
-            <h3>Summary</h3>
-            <p>• Total fuel consumed: ${fuelConsumptionData.reduce((sum, item) => sum + item.consumption, 0).toLocaleString()} liters</p>
-            <p>• Total cost: ₹${fuelConsumptionData.reduce((sum, item) => sum + item.cost, 0).toLocaleString()}</p>
-            <p>• Average monthly consumption: ${Math.round(fuelConsumptionData.reduce((sum, item) => sum + item.consumption, 0) / fuelConsumptionData.length).toLocaleString()} liters</p>
-          </div>
-        `;
-        
-      case 'maintenance':
-        return `
-          <h2>Maintenance Alerts & Schedule</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Vehicle</th>
-                <th>Issue</th>
-                <th>Due Date</th>
-                <th>Priority</th>
-                <th>Estimated Cost</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${maintenanceAlertsData.map(alert => `
-                <tr>
-                  <td><strong>${alert.vehicle}</strong></td>
-                  <td>${alert.issue}</td>
-                  <td>${alert.date}</td>
-                  <td class="priority-${alert.priority}">
-                    ${alert.priority.charAt(0).toUpperCase() + alert.priority.slice(1)}
-                  </td>
-                  <td>${alert.estimatedCost ? '₹' + alert.estimatedCost.toLocaleString() : 'To be determined'}</td>
-                  <td>
-                    <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; background: ${
-                      alert.date.includes('Today') ? '#fef2f2' : 
-                      alert.date.includes('Tomorrow') ? '#fffbeb' : 
-                      '#f0f9ff'
-                    }; color: ${
-                      alert.date.includes('Today') ? '#dc2626' : 
-                      alert.date.includes('Tomorrow') ? '#d97706' : 
-                      '#2563eb'
-                    };">
-                      ${alert.date.includes('Today') ? 'URGENT' : 
-                        alert.date.includes('Tomorrow') ? 'HIGH PRIORITY' : 
-                        'SCHEDULED'}
-                    </span>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          
-          <div style="margin-top: 30px; padding: 20px; background: #fef2f2; border-radius: 8px;">
-            <h3>⚠️ Immediate Actions Required</h3>
-            <p>• High priority maintenance items should be addressed immediately</p>
-            <p>• Total estimated maintenance cost: ₹${maintenanceAlertsData.reduce((sum, alert) => sum + (alert.estimatedCost || 0), 0).toLocaleString()}</p>
-            <p>• Schedule regular maintenance to avoid unexpected breakdowns</p>
-          </div>
-        `;
-        
-      default:
-        return '<p>No report content available.</p>';
-    }
-  };
-
-  // =================== CSV DOWNLOAD ===================
-  
-  const downloadCSV = (reportType: 'transport' | 'fuel' | 'maintenance') => {
+  const fetchDrivers = useCallback(async () => {
     try {
-      let csvContent = "data:text/csv;charset=utf-8,";
-      let headers = [];
-      let rows = [];
-
-      switch(reportType) {
-        case 'transport':
-          headers = ['Vehicle No.', 'Driver', 'Route', 'Capacity', 'Status', 'Fuel %', 'Last Service', 'Next Service'];
-          rows = vehicles.map(v => [
-            v.vehicleNo,
-            v.driver,
-            v.route,
-            v.capacity,
-            v.status,
-            v.fuel,
-            v.lastService,
-            v.nextService
-          ]);
-          break;
-        case 'fuel':
-          headers = ['Month', 'Consumption (L)', 'Cost (₹)', 'Cost/Liter'];
-          rows = fuelConsumptionData.map(item => [
-            item.month,
-            item.consumption,
-            `₹${item.cost}`,
-            `₹${Math.round(item.cost / item.consumption)}`
-          ]);
-          break;
-        case 'maintenance':
-          headers = ['Vehicle', 'Issue', 'Due Date', 'Priority', 'Estimated Cost'];
-          rows = maintenanceAlertsData.map(alert => [
-            alert.vehicle,
-            alert.issue,
-            alert.date,
-            alert.priority.toUpperCase(),
-            alert.estimatedCost ? `₹${alert.estimatedCost}` : 'N/A'
-          ]);
-          break;
+      setIsLoading(prev => ({ ...prev, drivers: true }));
+      const response = await driverApi.getAllDrivers();
+      
+      console.log('Drivers API Response:', response); // Debug
+      
+      if (response.success) {
+        const driversData = response.data?.data || response.data || [];
+        setDrivers(driversData);
       }
-
-      // Add headers
-      csvContent += headers.join(',') + '\n';
-      
-      // Add rows
-      rows.forEach(row => {
-        csvContent += row.map(cell => `"${cell}"`).join(',') + '\n';
-      });
-
-      // Create download link
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `transport-${reportType}-report-${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast({
-        title: "CSV Downloaded",
-        description: `Report has been saved as CSV file`,
-      });
-      
-    } catch (error) {
-      console.error('CSV generation error:', error);
+    } catch (error: any) {
+      console.error('Error fetching drivers:', error);
       toast({
         title: "Error",
-        description: "Failed to generate CSV file. Please try again.",
+        description: "Failed to fetch drivers",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(prev => ({ ...prev, drivers: false }));
+    }
+  }, []);
+
+  const fetchRoutes = useCallback(async () => {
+    try {
+      setIsLoading(prev => ({ ...prev, routes: true }));
+      const response = await routeApi.getAllRoutes();
+      
+      console.log('Routes API Response:', response); // Debug
+      
+      if (response.success) {
+        const routesData = response.data?.data || response.data || [];
+        setRoutes(routesData);
+        
+        // Prepare route efficiency data for chart
+        const efficiencyData = routesData.map((route: Route) => ({
+          route: route.routeNo,
+          capacity: route.monthlyEfficiency * 2,
+          occupied: route.monthlyStudents,
+          efficiency: route.monthlyEfficiency
+        }));
+        setRouteEfficiencyData(efficiencyData);
+      }
+    } catch (error: any) {
+      console.error('Error fetching routes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch routes",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(prev => ({ ...prev, routes: false }));
+    }
+  }, []);
+
+  const fetchMaintenance = useCallback(async () => {
+    try {
+      setIsLoading(prev => ({ ...prev, maintenance: true }));
+      const response = await maintenanceApi.getAllMaintenance();
+      
+      console.log('Maintenance API Response:', response); // Debug
+      
+      if (response.success) {
+        const maintenanceData = response.data?.data || response.data || [];
+        setMaintenanceAlerts(maintenanceData);
+      }
+    } catch (error: any) {
+      console.error('Error fetching maintenance:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch maintenance records",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(prev => ({ ...prev, maintenance: false }));
+    }
+  }, []);
+
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      setIsLoading(prev => ({ ...prev, dashboard: true }));
+      
+      // Fetch all stats in parallel
+      const [vehicleStatsRes, driverStatsRes, routeStatsRes, maintenanceStatsRes, fuelStatsRes] = await Promise.all([
+        vehicleApi.getVehicleStats(),
+        driverApi.getDriverStats(),
+        routeApi.getRouteStats(),
+        maintenanceApi.getMaintenanceStats(),
+        fuelLogApi.getFuelStats({ period: 'monthly' })
+      ]);
+
+      console.log('All stats responses:', {
+        vehicleStatsRes,
+        driverStatsRes,
+        routeStatsRes,
+        maintenanceStatsRes,
+        fuelStatsRes
+      });
+
+      // Update vehicle stats
+      if (vehicleStatsRes.success) {
+        setVehicleStats(vehicleStatsRes.data);
+        
+        // Create status distribution for pie chart
+        const distribution = [
+          { name: 'Active', value: vehicleStatsRes.data.activeVehicles || 0, color: '#10b981' },
+          { name: 'Maintenance', value: vehicleStatsRes.data.maintenanceVehicles || 0, color: '#f59e0b' },
+          { name: 'On Route', value: vehicleStatsRes.data.onRouteVehicles || 0, color: '#3b82f6' },
+          { name: 'Inactive', value: vehicleStatsRes.data.inactiveVehicles || 0, color: '#ef4444' }
+        ];
+        setStatusDistribution(distribution);
+        
+        // Update stats cards
+        setStats(prev => prev.map(stat => {
+          if (stat.title === 'Total Fleet') {
+            return { ...stat, value: vehicleStatsRes.data.totalVehicles || 0 };
+          }
+          return stat;
+        }));
+      }
+
+      // Update route stats
+      if (routeStatsRes.success) {
+        setStats(prev => prev.map(stat => {
+          if (stat.title === 'Active Routes') {
+            return { ...stat, value: routeStatsRes.data.activeRoutes || 0 };
+          }
+          if (stat.title === 'Students Transported') {
+            return { ...stat, value: routeStatsRes.data.totalOccupied || 0 };
+          }
+          return stat;
+        }));
+      }
+
+      // Update fuel stats
+      if (fuelStatsRes.success) {
+        // Mock fuel consumption data (your API might not have this yet)
+        const fuelData = [
+          { month: 'Jan', consumption: 450, cost: 35000 },
+          { month: 'Feb', consumption: 420, cost: 32000 },
+          { month: 'Mar', consumption: 480, cost: 37000 },
+          { month: 'Apr', consumption: 410, cost: 31500 },
+          { month: 'May', consumption: 460, cost: 35500 },
+          { month: 'Jun', consumption: 430, cost: 33000 },
+        ];
+        setFuelConsumptionData(fuelData);
+        
+        setStats(prev => prev.map(stat => {
+          if (stat.title === 'Fuel Efficiency') {
+            return { 
+              ...stat, 
+              value: `${fuelStatsRes.data.avgEfficiency || 0}%`,
+              change: 1.2
+            };
+          }
+          if (stat.title === 'Maintenance Cost') {
+            return { 
+              ...stat, 
+              value: `₹${(maintenanceStatsRes.success && maintenanceStatsRes.data.monthlyCost) || 0}`,
+              change: -3.4
+            };
+          }
+          return stat;
+        }));
+      }
+
+    } catch (error: any) {
+      console.error('Error fetching dashboard stats:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch dashboard statistics",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(prev => ({ ...prev, dashboard: false }));
+    }
+  }, []);
+
+  // Initialize Socket.IO
+  useEffect(() => {
+    // Comment out socket for now until backend setup
+    // socketService.connect();
+    
+    // Listen for real-time updates
+    // socketService.on('vehicle-added', (data: Vehicle) => {
+    //   setVehicles(prev => [...prev, data]);
+    //   toast({
+    //     title: "New Vehicle Added",
+    //     description: `${data.vehicleNo} has been added to the fleet`,
+    //   });
+    // });
+
+    return () => {
+      // socketService.disconnect();
+    };
+  }, []);
+
+  // Fetch all data on component mount
+  useEffect(() => {
+    fetchVehicles();
+    fetchDrivers();
+    fetchRoutes();
+    fetchMaintenance();
+    fetchDashboardStats();
+  }, [fetchVehicles, fetchDrivers, fetchRoutes, fetchMaintenance, fetchDashboardStats]);
+
+  // =================== API HANDLERS - FIXED ===================
+
+  const handleAddVehicle = async () => {
+    try {
+      if (!newVehicle.vehicleNo || !newVehicle.registrationNo || !newVehicle.make || !newVehicle.model) {
+        toast({
+          title: "Missing Information",
+          description: "Please fill in all required fields",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const response = await vehicleApi.createVehicle(newVehicle);
+      console.log('Create vehicle response:', response);
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Vehicle added successfully",
+        });
+        setIsAddVehicleOpen(false);
+        setNewVehicle({
+          vehicleNo: '',
+          registrationNo: '',
+          make: '',
+          model: '',
+          year: new Date().getFullYear(),
+          color: '',
+          capacity: 50,
+          fuelType: 'diesel',
+          currentFuel: 100,
+          status: 'active',
+          lastService: new Date().toISOString().split('T')[0],
+          nextService: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
+        });
+        fetchVehicles();
+        fetchDashboardStats(); // Refresh stats
+      }
+    } catch (error: any) {
+      console.error('Error adding vehicle:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to add vehicle",
         variant: "destructive",
       });
     }
   };
 
-  // =================== HANDLER FUNCTIONS ===================
-
-  const handleExport = (format: 'pdf' | 'excel', reportType?: 'transport' | 'fuel' | 'maintenance') => {
-    if (format === 'pdf') {
-      if (reportType) {
-        generateAndPrintReport(reportType);
-      } else {
-        generateAndPrintReport('transport');
+  const handleUpdateVehicleLocation = async (vehicleId: string, locationData: any) => {
+    try {
+      const response = await vehicleApi.updateVehicleLocation(vehicleId, locationData);
+      if (response.success) {
+        toast({
+          title: "Location Updated",
+          description: "Vehicle location updated successfully",
+        });
+        fetchVehicles();
       }
-    } else if (format === 'excel') {
-      if (reportType) {
-        downloadCSV(reportType);
-      } else {
-        downloadCSV('transport');
-      }
-    }
-  };
-
-  const handleDownloadReport = (title: string, format: string, reportType?: 'transport' | 'fuel' | 'maintenance') => {
-    toast({
-      title: "Downloading Report",
-      description: `Downloading ${title} as ${format}...`,
-    });
-    
-    if (format === 'PDF') {
-      handleExport('pdf', reportType);
-    } else if (format === 'Excel') {
-      handleExport('excel', reportType);
-    }
-  };
-
-  const handlePreviewReport = (title: string) => {
-    toast({
-      title: "Preview Report",
-      description: `Opening preview for ${title}...`,
-    });
-    
-    setTimeout(() => {
+    } catch (error: any) {
       toast({
-        title: "Report Preview",
-        description: `Previewing ${title}. Click to download.`,
-        action: (
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => handleDownloadReport(title, 'PDF', 'transport')}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download
-          </Button>
-        ),
+        title: "Error",
+        description: "Failed to update location",
+        variant: "destructive",
       });
-    }, 500);
+    }
   };
 
-  const handleViewAllReports = () => {
-    toast({
-      title: "All Reports",
-      description: "Opening full reports dashboard...",
-      action: (
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => handleExport('pdf', 'transport')}
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            PDF
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => handleExport('excel', 'transport')}
-          >
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
-            Excel
-          </Button>
-        </div>
-      ),
-    });
+  const handleUpdateFuelLevel = async (vehicleId: string, fuelLevel: number) => {
+    try {
+      const response = await vehicleApi.updateFuelLevel(vehicleId, { fuelLevel });
+      if (response.success) {
+        toast({
+          title: "Fuel Updated",
+          description: "Fuel level updated successfully",
+        });
+        fetchVehicles();
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to update fuel level",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAssignDriver = async (vehicleId: string, driverId: string) => {
+    try {
+      const response = await vehicleApi.assignDriver(vehicleId, { driverId });
+      if (response.success) {
+        toast({
+          title: "Driver Assigned",
+          description: "Driver assigned to vehicle successfully",
+        });
+        fetchVehicles();
+        fetchDrivers();
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to assign driver",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteVehicle = async () => {
+    if (!vehicleToDelete) return;
+    
+    try {
+      const response = await vehicleApi.deleteVehicle(vehicleToDelete);
+      if (response.success) {
+        setIsDeleteDialogOpen(false);
+        setVehicleToDelete(null);
+        toast({
+          title: "Success",
+          description: "Vehicle deleted successfully",
+        });
+        fetchVehicles();
+        fetchDashboardStats();
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to delete vehicle",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRefresh = () => {
-    setIsLoading(true);
-    // Simulate a refresh action
-    setTimeout(() => {
-      setIsLoading(false);
+    setIsLoading({
+      vehicles: true,
+      drivers: true,
+      routes: true,
+      maintenance: true,
+      dashboard: true
+    });
+
+    Promise.all([
+      fetchVehicles(),
+      fetchDrivers(),
+      fetchRoutes(),
+      fetchMaintenance(),
+      fetchDashboardStats()
+    ]).finally(() => {
+      setIsLoading({
+        vehicles: false,
+        drivers: false,
+        routes: false,
+        maintenance: false,
+        dashboard: false
+      });
       toast({
         title: "Refreshed",
-        description: "The data has been refreshed successfully.",
+        description: "Data refreshed successfully",
       });
-    }, 1000);
-  };
-
-  const handleAddVehicle = () => {
-    setIsAddVehicleOpen(true);
-  };
-
-  const handleSaveVehicle = () => {
-    if (!newVehicle.vehicleNo || !newVehicle.driver || !newVehicle.route) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const updatedVehicles = [...vehicles, { 
-      id: vehicles.length + 1, 
-      vehicleNo: newVehicle.vehicleNo, 
-      driver: newVehicle.driver, 
-      route: newVehicle.route, 
-      capacity: newVehicle.capacity, 
-      fuel: newVehicle.fuel, 
-      status: 'active' as Vehicle['status'], 
-      lastService: new Date().toISOString().split('T')[0], 
-      nextService: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
-    }];
-    
-    setVehicles(updatedVehicles.map(vehicle => ({
-      ...vehicle,
-      status: vehicle.status as Vehicle['status'],
-    })));
-    setNewVehicle({ vehicleNo: '', driver: '', route: '', capacity: 50, fuel: 100 });
-    setIsAddVehicleOpen(false);
-    
-    toast({
-      title: "Vehicle Added",
-      description: "The new vehicle has been added to the fleet.",
     });
   };
 
-  // ... (KEEP ALL YOUR OTHER EXISTING FUNCTIONS - handleRefresh, handleAddVehicle, etc.)
-  // Just replace the export/download functions above
+  // =================== HELPER FUNCTIONS ===================
 
-  // ... (KEEP ALL YOUR JSX CODE EXACTLY AS BEFORE)
-  // Only the button handlers will use the new functions
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'maintenance': return 'bg-amber-100 text-amber-800';
+      case 'inactive': return 'bg-red-100 text-red-800';
+      case 'on-route': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
 
-  // In your JSX, the buttons will work like this:
-  // <Button onClick={() => handleDownloadReport('Monthly Transport Report', 'PDF', 'transport')}>
-  //   Download PDF
-  // </Button>
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'active': return <CheckCircle className="h-4 w-4" />;
+      case 'maintenance': return <Wrench className="h-4 w-4" />;
+      case 'inactive': return <XCircle className="h-4 w-4" />;
+      case 'on-route': return <Navigation className="h-4 w-4" />;
+      default: return <Bus className="h-4 w-4" />;
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  const getDriverInitials = (driver: { firstName: string; lastName: string }) => {
+    return `${driver.firstName.charAt(0)}${driver.lastName.charAt(0)}`.toUpperCase();
+  };
+
+  // =================== RENDER ===================
 
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Transport Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Bus className="h-8 w-8 text-blue-600" />
+            Transport Management
+          </h1>
           <p className="text-muted-foreground mt-1">Monitor fleet, manage routes, and track vehicle performance</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading.dashboard}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading.dashboard ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => handleExport('pdf', 'transport')}>
-                <FileText className="h-4 w-4 mr-2" />
-                Export as PDF
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport('excel', 'transport')}>
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Export as CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Printer className="h-4 w-4 mr-2" />
-                Print Report
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           <Dialog open={isAddVehicleOpen} onOpenChange={setIsAddVehicleOpen}>
             <DialogTrigger asChild>
-              <Button onClick={handleAddVehicle}>
+              <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Vehicle
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Add New Vehicle</DialogTitle>
                 <DialogDescription>
-                  Add a new vehicle to your transport fleet.
+                  Add a new vehicle to your transport fleet
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="vehicleNo" className="text-right">
-                    Vehicle No.*
-                  </Label>
+              <div className="grid grid-cols-2 gap-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="vehicleNo">Vehicle No.*</Label>
                   <Input
                     id="vehicleNo"
                     value={newVehicle.vehicleNo}
                     onChange={(e) => setNewVehicle({...newVehicle, vehicleNo: e.target.value})}
-                    className="col-span-3"
-                    placeholder="KA-01-AB-1234"
+                    placeholder="BUS-001"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="driver" className="text-right">
-                    Driver*
-                  </Label>
+                <div className="space-y-2">
+                  <Label htmlFor="registrationNo">Registration No.*</Label>
                   <Input
-                    id="driver"
-                    value={newVehicle.driver}
-                    onChange={(e) => setNewVehicle({...newVehicle, driver: e.target.value})}
-                    className="col-span-3"
-                    placeholder="John Doe"
+                    id="registrationNo"
+                    value={newVehicle.registrationNo}
+                    onChange={(e) => setNewVehicle({...newVehicle, registrationNo: e.target.value})}
+                    placeholder="KA01AB1234"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="route" className="text-right">
-                    Route*
-                  </Label>
+                <div className="space-y-2">
+                  <Label htmlFor="make">Make*</Label>
                   <Input
-                    id="route"
-                    value={newVehicle.route}
-                    onChange={(e) => setNewVehicle({...newVehicle, route: e.target.value})}
-                    className="col-span-3"
-                    placeholder="Route 1 (North Zone)"
+                    id="make"
+                    value={newVehicle.make}
+                    onChange={(e) => setNewVehicle({...newVehicle, make: e.target.value})}
+                    placeholder="Tata"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="capacity" className="text-right">
-                    Capacity
-                  </Label>
+                <div className="space-y-2">
+                  <Label htmlFor="model">Model*</Label>
+                  <Input
+                    id="model"
+                    value={newVehicle.model}
+                    onChange={(e) => setNewVehicle({...newVehicle, model: e.target.value})}
+                    placeholder="Starbus"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="year">Year</Label>
+                  <Input
+                    id="year"
+                    type="number"
+                    value={newVehicle.year}
+                    onChange={(e) => setNewVehicle({...newVehicle, year: parseInt(e.target.value)})}
+                    min="2000"
+                    max={new Date().getFullYear()}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="color">Color</Label>
+                  <Input
+                    id="color"
+                    value={newVehicle.color}
+                    onChange={(e) => setNewVehicle({...newVehicle, color: e.target.value})}
+                    placeholder="White"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="capacity">Capacity</Label>
                   <Input
                     id="capacity"
                     type="number"
                     value={newVehicle.capacity}
-                    onChange={(e) => setNewVehicle({...newVehicle, capacity: parseInt(e.target.value) || 0})}
-                    className="col-span-3"
+                    onChange={(e) => setNewVehicle({...newVehicle, capacity: parseInt(e.target.value)})}
+                    min="1"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="fuel" className="text-right">
-                    Fuel Level
-                  </Label>
-                  <div className="col-span-3 flex items-center gap-2">
-                    <Input
-                      id="fuel"
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={newVehicle.fuel}
-                      onChange={(e) => setNewVehicle({...newVehicle, fuel: parseInt(e.target.value)})}
-                      className="flex-1"
-                    />
-                    <span className="w-12 text-sm">{newVehicle.fuel}%</span>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fuelType">Fuel Type</Label>
+                  <Select
+                    value={newVehicle.fuelType}
+                    onValueChange={(value: 'petrol' | 'diesel' | 'cng' | 'electric') => 
+                      setNewVehicle({...newVehicle, fuelType: value})
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select fuel type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="diesel">Diesel</SelectItem>
+                      <SelectItem value="petrol">Petrol</SelectItem>
+                      <SelectItem value="cng">CNG</SelectItem>
+                      <SelectItem value="electric">Electric</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="currentFuel">Current Fuel Level (%)</Label>
+                  <Input
+                    id="currentFuel"
+                    type="number"
+                    value={newVehicle.currentFuel}
+                    onChange={(e) => setNewVehicle({...newVehicle, currentFuel: parseInt(e.target.value)})}
+                    min="0"
+                    max="100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select
+                    value={newVehicle.status}
+                    onValueChange={(value: 'active' | 'maintenance' | 'inactive' | 'on-route') => 
+                      setNewVehicle({...newVehicle, status: value})
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="maintenance">Maintenance</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="on-route">On Route</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastService">Last Service Date</Label>
+                  <Input
+                    id="lastService"
+                    type="date"
+                    value={newVehicle.lastService}
+                    onChange={(e) => setNewVehicle({...newVehicle, lastService: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nextService">Next Service Date</Label>
+                  <Input
+                    id="nextService"
+                    type="date"
+                    value={newVehicle.nextService}
+                    onChange={(e) => setNewVehicle({...newVehicle, nextService: e.target.value})}
+                  />
                 </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsAddVehicleOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleSaveVehicle}>
+                <Button onClick={handleAddVehicle} disabled={isLoading.vehicles}>
+                  {isLoading.vehicles ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : null}
                   Add Vehicle
                 </Button>
               </DialogFooter>
@@ -863,143 +906,587 @@ const Transport = () => {
         </div>
       </div>
 
-      {/* ... KEEP ALL YOUR EXISTING JSX CODE ... */}
-      {/* Just make sure your download buttons use the new handlers */}
-      
-      {/* In the Reports Tab section: */}
-      <TabsContent value="reports" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Reports & Analytics</CardTitle>
-            <CardDescription>Generate and download transport reports</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Monthly Transport Report</CardTitle>
-                  <CardDescription>Detailed monthly analysis</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">Includes fleet performance, fuel consumption, and route efficiency</p>
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePreviewReport('Monthly Transport Report')}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Preview
-                    </Button>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleDownloadReport('Monthly Transport Report', 'PDF', 'transport')}
-                      >
-                        <FileText className="h-4 w-4 mr-2" />
-                        PDF
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleDownloadReport('Monthly Transport Report', 'Excel', 'transport')}
-                      >
-                        <FileSpreadsheet className="h-4 w-4 mr-2" />
-                        CSV
-                      </Button>
-                    </div>
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {stats.map((stat, index) => (
+          <Card key={index} className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-blue-700">{stat.title}</p>
+                  <p className="text-2xl font-bold text-blue-900">{stat.value}</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    {stat.isPositive ? (
+                      <TrendingUp className="h-3 w-3 text-green-600" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3 text-red-600" />
+                    )}
+                    <span className={`text-xs ${stat.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                      {stat.isPositive ? '+' : ''}{stat.change}%
+                    </span>
+                    <span className="text-xs text-gray-500 ml-1">vs last month</span>
                   </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Fuel Consumption Report</CardTitle>
-                  <CardDescription>Monthly fuel analysis</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">Detailed fuel usage and cost analysis</p>
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePreviewReport('Fuel Consumption Report')}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Preview
-                    </Button>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleDownloadReport('Fuel Consumption Report', 'PDF', 'fuel')}
+                </div>
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <stat.icon className="h-5 w-5 text-blue-600" />
+                </div>
+              </div>
+              <p className="text-xs text-blue-600 mt-2">{stat.description}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Tabs Navigation */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <BarChart className="h-4 w-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="fleet" className="flex items-center gap-2">
+            <Bus className="h-4 w-4" />
+            Fleet
+          </TabsTrigger>
+          <TabsTrigger value="drivers" className="flex items-center gap-2">
+            <User className="h-4 w-4" />
+            Drivers
+          </TabsTrigger>
+          <TabsTrigger value="routes" className="flex items-center gap-2">
+            <Route className="h-4 w-4" />
+            Routes
+          </TabsTrigger>
+          <TabsTrigger value="maintenance" className="flex items-center gap-2">
+            <Wrench className="h-4 w-4" />
+            Maintenance
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Fleet Status Chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bus className="h-5 w-5" />
+                  Fleet Status Distribution
+                </CardTitle>
+                <CardDescription>Current status of all vehicles</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsPieChart>
+                      <Pie
+                        data={statusDistribution}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, value }) => `${name}: ${value}`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
                       >
-                        <FileText className="h-4 w-4 mr-2" />
-                        PDF
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleDownloadReport('Fuel Consumption Report', 'Excel', 'fuel')}
-                      >
-                        <FileSpreadsheet className="h-4 w-4 mr-2" />
-                        CSV
-                      </Button>
+                        {statusDistribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Route Efficiency */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Map className="h-5 w-5" />
+                  Route Efficiency
+                </CardTitle>
+                <CardDescription>Utilization across all routes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsBarChart data={routeEfficiencyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="route" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="occupied" name="Occupied Seats" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="capacity" name="Total Capacity" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Fuel Consumption Trend */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Fuel className="h-5 w-5" />
+                Fuel Consumption Trend
+              </CardTitle>
+              <CardDescription>Monthly fuel usage and costs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={fuelConsumptionData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="month" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Line yAxisId="left" type="monotone" dataKey="consumption" name="Consumption (L)" stroke="#3b82f6" strokeWidth={2} />
+                    <Line yAxisId="right" type="monotone" dataKey="cost" name="Cost (₹)" stroke="#10b981" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Fleet Tab */}
+        <TabsContent value="fleet" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bus className="h-5 w-5" />
+                Vehicle Fleet
+              </CardTitle>
+              <CardDescription>Manage and monitor all vehicles in the fleet</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading.vehicles ? (
+                <div className="flex justify-center items-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2">Loading vehicles...</span>
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Vehicle No.</TableHead>
+                        <TableHead>Driver</TableHead>
+                        <TableHead>Route</TableHead>
+                        <TableHead>Capacity</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Fuel</TableHead>
+                        <TableHead>Last Service</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {vehicles.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                            No vehicles found. Add a new vehicle to get started.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        vehicles.map((vehicle) => (
+                          <TableRow key={vehicle._id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <Truck className="h-4 w-4 text-blue-600" />
+                                {vehicle.vehicleNo}
+                              </div>
+                              <div className="text-xs text-gray-500">{vehicle.registrationNo}</div>
+                            </TableCell>
+                            <TableCell>
+                              {vehicle.currentDriver ? (
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-8 w-8">
+                                    <AvatarFallback>
+                                      {getDriverInitials(vehicle.currentDriver)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <div className="font-medium">{`${vehicle.currentDriver.firstName} ${vehicle.currentDriver.lastName}`}</div>
+                                    <div className="text-xs text-gray-500">{vehicle.currentDriver.phone}</div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">Unassigned</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {vehicle.currentRoute ? (
+                                <div>
+                                  <div className="font-medium">{vehicle.currentRoute.routeNo}</div>
+                                  <div className="text-xs text-gray-500">{vehicle.currentRoute.name}</div>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">No route</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{vehicle.capacity} seats</div>
+                              <div className="text-xs text-gray-500">{vehicle.make} {vehicle.model}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(vehicle.status)}`}>
+                                {getStatusIcon(vehicle.status)}
+                                {vehicle.status.charAt(0).toUpperCase() + vehicle.status.slice(1)}
+                              </div>
+                              {vehicle.currentLocation?.address && (
+                                <p className="text-xs text-gray-500 mt-1 truncate max-w-[150px]">
+                                  <MapPin className="h-3 w-3 inline mr-1" />
+                                  {vehicle.currentLocation.address}
+                                </p>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full ${vehicle.currentFuel > 70 ? 'bg-green-500' : vehicle.currentFuel > 30 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                    style={{ width: `${vehicle.currentFuel}%` }}
+                                  />
+                                </div>
+                                <span className="text-sm">{vehicle.currentFuel}%</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">{formatDate(vehicle.lastService)}</div>
+                              <div className="text-xs text-gray-500">Next: {formatDate(vehicle.nextService)}</div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => {
+                                    toast({
+                                      title: "Vehicle Details",
+                                      description: `Viewing details for ${vehicle.vehicleNo}`,
+                                    });
+                                  }}>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => {
+                                    if (drivers.length > 0) {
+                                      const driverId = prompt(
+                                        `Assign driver to ${vehicle.vehicleNo}\nAvailable drivers:\n${drivers.map(d => `${d.employeeId}: ${d.firstName} ${d.lastName}`).join('\n')}\n\nEnter driver ID:`
+                                      );
+                                      if (driverId) {
+                                        handleAssignDriver(vehicle._id, driverId);
+                                      }
+                                    } else {
+                                      toast({
+                                        title: "No Drivers",
+                                        description: "Please add drivers first",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}>
+                                    <User className="h-4 w-4 mr-2" />
+                                    Assign Driver
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => {
+                                    const newFuel = prompt(`Enter new fuel level for ${vehicle.vehicleNo} (0-100):`, vehicle.currentFuel.toString());
+                                    if (newFuel && !isNaN(parseInt(newFuel)) && parseInt(newFuel) >= 0 && parseInt(newFuel) <= 100) {
+                                      handleUpdateFuelLevel(vehicle._id, parseInt(newFuel));
+                                    }
+                                  }}>
+                                    <Fuel className="h-4 w-4 mr-2" />
+                                    Update Fuel
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    className="text-red-600"
+                                    onClick={() => {
+                                      setVehicleToDelete(vehicle._id);
+                                      setIsDeleteDialogOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete Vehicle
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Drivers Tab */}
+        <TabsContent value="drivers" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Drivers
+              </CardTitle>
+              <CardDescription>Manage drivers and their assignments</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading.drivers ? (
+                <div className="flex justify-center items-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2">Loading drivers...</span>
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Driver ID</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>License</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Assigned Vehicle</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {drivers.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                            No drivers found.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        drivers.map((driver) => (
+                          <TableRow key={driver._id}>
+                            <TableCell className="font-medium">
+                              {driver.employeeId}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{driver.firstName} {driver.lastName}</div>
+                              <div className="text-xs text-gray-500">{driver.email}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{driver.phone}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{driver.licenseNo}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                driver.status === 'active' ? 'default' :
+                                driver.status === 'on-leave' ? 'secondary' :
+                                driver.status === 'suspended' ? 'destructive' : 'outline'
+                              }>
+                                {driver.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {driver.assignedVehicle ? (
+                                <div>
+                                  <div className="font-medium">{driver.assignedVehicle.vehicleNo}</div>
+                                  <div className="text-xs text-gray-500">{driver.assignedVehicle.model}</div>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">Unassigned</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="sm">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Routes Tab */}
+        <TabsContent value="routes" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Route className="h-5 w-5" />
+                Route Management
+              </CardTitle>
+              <CardDescription>Manage transport routes and assignments</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading.routes ? (
+                <div className="flex justify-center items-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2">Loading routes...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {routes.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      No routes found. Add routes to get started.
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Maintenance Report</CardTitle>
-                  <CardDescription>Vehicle maintenance history</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">Maintenance logs and upcoming schedules</p>
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePreviewReport('Maintenance Report')}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Preview
-                    </Button>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleDownloadReport('Maintenance Report', 'PDF', 'maintenance')}
-                      >
-                        <FileText className="h-4 w-4 mr-2" />
-                        PDF
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleViewAllReports()}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        View All
-                      </Button>
+                  ) : (
+                    routes.map((route) => (
+                      <Card key={route._id} className="border">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-semibold">{route.routeNo} - {route.name}</h3>
+                              <p className="text-sm text-gray-600">
+                                {route.startPoint} → {route.endPoint}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline">{route.zone.toUpperCase()} ZONE</Badge>
+                                <Badge variant={route.status === 'active' ? 'default' : 'secondary'}>
+                                  {route.status.toUpperCase().replace('-', ' ')}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold">
+                                {route.monthlyStudents}/{route.monthlyEfficiency * 2 || 50}
+                              </div>
+                              <p className="text-sm text-gray-600">students / capacity</p>
+                              <p className="text-sm text-gray-600">Efficiency: {route.monthlyEfficiency || 0}%</p>
+                            </div>
+                          </div>
+                          <div className="mt-4">
+                            <div className="flex items-center justify-between text-sm mb-1">
+                              <span>Capacity Utilization</span>
+                              <span>{Math.round((route.monthlyStudents / (route.monthlyEfficiency * 2 || 50)) * 100)}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full ${(route.monthlyEfficiency || 0) > 90 ? 'bg-green-500' : (route.monthlyEfficiency || 0) > 70 ? 'bg-blue-500' : 'bg-amber-500'}`}
+                                style={{ width: `${route.monthlyEfficiency || 0}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-center justify-between text-sm">
+                            <div>
+                              <span className="text-gray-600">Distance: </span>
+                              <span className="font-medium">{route.totalDistance} km</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Time: </span>
+                              <span className="font-medium">{route.estimatedTime} mins</span>
+                            </div>
+                            <div>
+                              {route.assignedVehicle ? (
+                                <span className="text-green-600">Vehicle Assigned</span>
+                              ) : (
+                                <span className="text-red-600">No Vehicle</span>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Maintenance Tab */}
+        <TabsContent value="maintenance" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="h-5 w-5" />
+                Maintenance Records
+              </CardTitle>
+              <CardDescription>View and manage vehicle maintenance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading.maintenance ? (
+                <div className="flex justify-center items-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2">Loading maintenance records...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {maintenanceAlerts.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      No maintenance records found.
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      {/* ... REST OF YOUR JSX CODE ... */}
+                  ) : (
+                    maintenanceAlerts.map((alert) => (
+                      <div key={alert._id} className="flex items-start justify-between p-3 border rounded-lg hover:bg-gray-50">
+                        <div>
+                          <div className="font-medium">{alert.vehicle.vehicleNo}</div>
+                          <p className="text-sm text-gray-600">{alert.issueDescription}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Calendar className="h-3 w-3 text-gray-400" />
+                            <span className="text-xs text-gray-500">{formatDate(alert.scheduledDate)}</span>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              alert.priority === 'critical' ? 'bg-red-100 text-red-800' :
+                              alert.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                              alert.priority === 'medium' ? 'bg-amber-100 text-amber-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {alert.priority.toUpperCase()}
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              alert.status === 'pending' ? 'bg-gray-100 text-gray-800' :
+                              alert.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
+                              alert.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {alert.status.replace('-', ' ').toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">₹{alert.estimatedCost?.toLocaleString() || 'TBD'}</div>
+                          <Button size="sm" variant="outline" className="mt-2">
+                            Update Status
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the vehicle
+              and remove all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setVehicleToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteVehicle} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

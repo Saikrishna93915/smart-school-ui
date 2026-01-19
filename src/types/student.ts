@@ -36,6 +36,11 @@ export interface StudentAddress {
 
 // --- Main Student Interface (Expected from GET /students/:id) ---
 export interface Student {
+    firstName: any;
+    lastName: any;
+    section: string;
+    phone: string;
+    email: string;
     name: any;
     fullName: any;
     admissionNo: string;

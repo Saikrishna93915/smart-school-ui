@@ -1,16 +1,16 @@
-// src/pages/finance/FeeDefaulters.tsx
+// src/pages/finance/FeeDefaulters.tsx - UPDATED VERSION
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner'; // Using sonner for notifications
 import {
   Search,
   Mail,
   AlertCircle,
   Download,
   Phone,
-  User,
   RefreshCw,
   Send,
   Filter,
@@ -19,7 +19,6 @@ import {
   TrendingDown,
   CalendarDays,
   Users,
-  MessageSquare,
   MoreVertical,
   Clock,
   Eye,
@@ -27,18 +26,19 @@ import {
   ShieldAlert,
   Target,
   BarChart3,
-  PieChart,
   CheckCircle,
-  XCircle,
   MailWarning,
   PhoneCall,
   MailOpen,
+  MessageSquare,
   History,
   Settings,
-  Zap,
   ArrowUpRight,
-  ChevronRight,
-  MessageCircle
+  Loader2,
+  X,
+  Check,
+  ExternalLink,
+  CreditCard
 } from 'lucide-react';
 import {
   Select,
@@ -75,299 +75,302 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
-// Mock data
-const MOCK_DEFAULTERS = [
-  {
-    id: 1,
-    studentId: 'STU2024001',
-    studentName: 'Priya Patel',
-    className: '10-A',
-    rollNo: '25',
-    parentName: 'Rakesh Patel',
-    parentPhone: '+91 98765 43210',
-    parentEmail: 'rakesh.patel@email.com',
-    amount: 15000,
-    dueDate: '2024-11-15',
-    daysOverdue: 25,
-    status: 'Critical',
-    remindersSent: 2,
-    lastContact: '2024-11-20',
-    notes: 'Father traveling, will pay next week',
-    avatarColor: 'bg-pink-100 text-pink-600',
-    priority: 1
-  },
-  {
-    id: 2,
-    studentId: 'STU2024002',
-    studentName: 'Amit Kumar',
-    className: '10-B',
-    rollNo: '12',
-    parentName: 'Suresh Kumar',
-    parentPhone: '+91 98765 43211',
-    parentEmail: 'suresh.kumar@email.com',
-    amount: 22500,
-    dueDate: '2024-10-30',
-    daysOverdue: 40,
-    status: 'Critical',
-    remindersSent: 3,
-    lastContact: '2024-11-25',
-    notes: 'Multiple reminders sent, needs follow-up call',
-    avatarColor: 'bg-blue-100 text-blue-600',
-    priority: 1
-  },
-  {
-    id: 3,
-    studentId: 'STU2024003',
-    studentName: 'Karan Malhotra',
-    className: '10-B',
-    rollNo: '18',
-    parentName: 'Sunil Malhotra',
-    parentPhone: '+91 98765 43212',
-    parentEmail: 'sunil.malhotra@email.com',
-    amount: 8500,
-    dueDate: '2024-11-20',
-    daysOverdue: 20,
-    status: 'High',
-    remindersSent: 1,
-    lastContact: '2024-11-22',
-    notes: 'Partial payment promised this week',
-    avatarColor: 'bg-green-100 text-green-600',
-    priority: 2
-  },
-  {
-    id: 4,
-    studentId: 'STU2024004',
-    studentName: 'Meera Nair',
-    className: '9-A',
-    rollNo: '15',
-    parentName: 'Krishna Nair',
-    parentPhone: '+91 98765 43213',
-    parentEmail: 'krishna.nair@email.com',
-    amount: 12000,
-    dueDate: '2024-11-25',
-    daysOverdue: 15,
-    status: 'High',
-    remindersSent: 0,
-    lastContact: 'None',
-    notes: 'New admission, may need payment plan',
-    avatarColor: 'bg-purple-100 text-purple-600',
-    priority: 2
-  },
-  {
-    id: 5,
-    studentId: 'STU2024005',
-    studentName: 'Rahul Sharma',
-    className: '11-A',
-    rollNo: '08',
-    parentName: 'Vikram Sharma',
-    parentPhone: '+91 98765 43214',
-    parentEmail: 'vikram.sharma@email.com',
-    amount: 18000,
-    dueDate: '2024-11-28',
-    daysOverdue: 12,
-    status: 'Moderate',
-    remindersSent: 1,
-    lastContact: '2024-11-29',
-    notes: 'Payment scheduled for next week',
-    avatarColor: 'bg-amber-100 text-amber-600',
-    priority: 3
-  },
-  {
-    id: 6,
-    studentId: 'STU2024006',
-    studentName: 'Sneha Reddy',
-    className: '12-A',
-    rollNo: '03',
-    parentName: 'Vikram Reddy',
-    parentPhone: '+91 98765 43215',
-    parentEmail: 'vikram.reddy@email.com',
-    amount: 28000,
-    dueDate: '2024-12-01',
-    daysOverdue: 9,
-    status: 'Moderate',
-    remindersSent: 0,
-    lastContact: 'None',
-    notes: 'Final year student, awaiting scholarship',
-    avatarColor: 'bg-red-100 text-red-600',
-    priority: 3
-  },
-];
-
-// Chart data
-const overdueDistributionData = [
-  { range: '0-15 days', count: 8, amount: 85000 },
-  { range: '16-30 days', count: 12, amount: 185000 },
-  { range: '31-45 days', count: 5, amount: 125000 },
-  { range: '45+ days', count: 3, amount: 95000 },
-];
-
-const classWiseData = [
-  { class: '10-A', count: 8, amount: 120000 },
-  { class: '10-B', count: 12, amount: 185000 },
-  { class: '11-A', count: 6, amount: 95000 },
-  { class: '11-B', count: 4, amount: 65000 },
-  { class: '12-A', count: 3, amount: 85000 },
-];
+// Import the service
+import { 
+  feeDefaultersService, 
+  type Defaulter, 
+  type PaginatedResponse,
+  type StatisticsResponse 
+} from '@/Services/feeDefaultersService';
 
 const FeeDefaulters = () => {
+  // State management
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('All Classes');
   const [selectedStatus, setSelectedStatus] = useState('All Status');
   const [selectedPriority, setSelectedPriority] = useState('All Priorities');
   const [daysOverdueFilter, setDaysOverdueFilter] = useState('All');
-  const [selectedDefaulters, setSelectedDefaulters] = useState<number[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  const [showReminderSettings, setShowReminderSettings] = useState(false);
-  const [reminderMessage, setReminderMessage] = useState('Kindly clear the outstanding fee amount at the earliest to avoid any inconvenience.');
-  const [selectedDefaulter, setSelectedDefaulter] = useState<any>(null);
-  const [showDetails, setShowDetails] = useState(false);
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+  const [selectedDefaulters, setSelectedDefaulters] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
   
-  const defaulters = MOCK_DEFAULTERS;
+  // Data states
+  const [defaulters, setDefaulters] = useState<Defaulter[]>([]);
+  const [summary, setSummary] = useState({
+    totalAmount: 0,
+    totalDefaulters: 0,
+    avgDaysOverdue: 0,
+    criticalCount: 0,
+    highCount: 0,
+    moderateCount: 0,
+    recoveryRate: 78,
+  });
+  const [overdueDistribution, setOverdueDistribution] = useState<
+    Array<{ range: string; count: number; amount: number }>
+  >([]);
+  const [classWiseDistribution, setClassWiseDistribution] = useState<
+    Array<{ _id: string; count: number; totalAmount: number }>
+  >([]);
+  const [statistics, setStatistics] = useState<StatisticsResponse['statistics'] | null>(null);
   
-  // Stats
-  const totalDefaulters = defaulters.length;
-  const totalAmount = defaulters.reduce((sum, defaulter) => sum + defaulter.amount, 0);
-  const criticalCount = defaulters.filter(d => d.status === 'Critical').length;
-  const highCount = defaulters.filter(d => d.status === 'High').length;
-  const moderateCount = defaulters.filter(d => d.status === 'Moderate').length;
-  const avgDaysOverdue = defaulters.reduce((sum, d) => sum + d.daysOverdue, 0) / totalDefaulters;
-  
-  const classOptions = ['All Classes', 'LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-  const statusOptions = ['All Status', 'Critical', 'High', 'Moderate', 'Low'];
-  const priorityOptions = ['All Priorities', 'Critical (1)', 'High (2)', 'Moderate (3)', 'Low (4)'];
-  const daysOptions = ['All', '0-15 days', '16-30 days', '31-45 days', '45+ days'];
+  // UI states
+  const [showReminderDialog, setShowReminderDialog] = useState(false);
+  const [reminderMessage, setReminderMessage] = useState('Dear parent, kindly clear the outstanding fee amount at the earliest to avoid any inconvenience.');
+  const [selectedDefaulter, setSelectedDefaulter] = useState<Defaulter | null>(null);
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [showMarkPaidDialog, setShowMarkPaidDialog] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentNotes, setPaymentNotes] = useState('');
 
-  // Filter defaulters
-  useEffect(() => {
-    let result = defaulters;
-    
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      result = result.filter(defaulter =>
-        defaulter.studentName.toLowerCase().includes(searchLower) ||
-        defaulter.parentName.toLowerCase().includes(searchLower) ||
-        defaulter.studentId.toLowerCase().includes(searchLower) ||
-        defaulter.parentPhone.toLowerCase().includes(searchLower) ||
-        defaulter.className.toLowerCase().includes(searchLower)
-      );
-    }
-    
-    if (selectedClass !== 'All Classes') {
-      result = result.filter(defaulter => defaulter.className === selectedClass);
-    }
-    
-    if (selectedStatus !== 'All Status') {
-      result = result.filter(defaulter => defaulter.status === selectedStatus);
-    }
-    
-    if (selectedPriority !== 'All Priorities') {
-      const priorityNum = parseInt(selectedPriority.split('(')[1]);
-      result = result.filter(defaulter => defaulter.priority === priorityNum);
-    }
-    
-    if (daysOverdueFilter !== 'All') {
-      const [min, max] = daysOverdueFilter.split(' ')[0].split('-');
-      result = result.filter(defaulter => {
-        const days = defaulter.daysOverdue;
-        if (daysOverdueFilter === '45+ days') return days >= 45;
-        return days >= parseInt(min) && days <= parseInt(max);
-      });
-    }
-    
-    setFilteredDefaulters(result);
-    // Reset selection when filters change
-    setSelectedDefaulters([]);
-  }, [defaulters, searchTerm, selectedClass, selectedStatus, selectedPriority, daysOverdueFilter]);
-
-  const [filteredDefaulters, setFilteredDefaulters] = useState(defaulters);
-  
-  const handleRefresh = () => {
+  // Load defaulters data
+  const loadDefaulters = async () => {
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const params: any = {
+        page,
+        limit,
+        search: searchTerm || undefined,
+        className: selectedClass !== 'All Classes' ? selectedClass : undefined,
+        status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
+        priority: selectedPriority !== 'All Priorities' ? selectedPriority.split(' ')[0] : undefined,
+        daysOverdue: daysOverdueFilter !== 'All' ? daysOverdueFilter : undefined,
+        minAmount: minAmount || undefined,
+        maxAmount: maxAmount || undefined,
+        sortBy: 'daysOverdue',
+        sortOrder: 'desc'
+      };
+
+      // Remove undefined values
+      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+
+      const response = await feeDefaultersService.getFeeDefaulters(params);
+      
+      setDefaulters(response.defaulters);
+      setSummary(response.summary);
+      setTotalPages(response.pagination.pages);
+      
+      // Set distribution data
+      if (response.distributions) {
+        setOverdueDistribution(response.distributions.overdueDistribution);
+        // Map API shape { class, count, amount } to local shape { _id, count, totalAmount }
+        setClassWiseDistribution(
+          (response.distributions.classWiseDistribution || []).map((c: any) => ({
+            _id: c.class ?? c._id ?? 'Unknown',
+            count: c.count ?? 0,
+            totalAmount: c.amount ?? c.totalAmount ?? 0,
+          }))
+        );
+      }
+
+      toast.success(`Loaded ${response.defaulters.length} defaulters`);
+    } catch (error: any) {
+      console.error('Error loading defaulters:', error);
+      toast.error(error.response?.data?.message || 'Failed to load defaulters');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
-  
-  const handleSendReminder = (defaulter: any) => {
-    alert(`Reminder sent to ${defaulter.parentName} (${defaulter.parentPhone})\n\nMessage: ${reminderMessage}`);
+
+  // Load statistics
+  const loadStatistics = async () => {
+    try {
+      const response = await feeDefaultersService.getStatistics();
+      setStatistics(response.statistics);
+    } catch (error: any) {
+      console.error('Error loading statistics:', error);
+      // Don't show error toast for statistics, as it's not critical
+    }
   };
-  
-  const handleBulkReminders = () => {
+
+  // Initial load
+  useEffect(() => {
+    loadDefaulters();
+    loadStatistics();
+  }, [page]);
+
+  // Load when filters change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (page === 1) {
+        loadDefaulters();
+      } else {
+        setPage(1);
+      }
+    }, 500); // Debounce search
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, selectedClass, selectedStatus, selectedPriority, daysOverdueFilter, minAmount, maxAmount]);
+
+  // Load defaulter details
+  const loadDefaulterDetails = async (admissionNumber: string) => {
+    try {
+      const response = await feeDefaultersService.getDefaulterDetails(admissionNumber);
+      setSelectedDefaulter(response.defaulter);
+      setShowDetailsDialog(true);
+    } catch (error: any) {
+      console.error('Error loading defaulter details:', error);
+      toast.error(error.response?.data?.message || 'Failed to load details');
+    }
+  };
+
+  // Send reminders
+  const handleSendReminders = async () => {
     if (selectedDefaulters.length === 0) {
-      alert('Please select students to send reminders');
+      toast.error('Please select at least one defaulter');
       return;
     }
-    
-    const confirmSend = window.confirm(
-      `Send payment reminders to ${selectedDefaulters.length} selected parents?`
-    );
-    
-    if (confirmSend) {
-      alert(`Reminders sent successfully to ${selectedDefaulters.length} parents`);
+
+    setReminderLoading(true);
+    try {
+      await feeDefaultersService.sendReminders({
+        defaulters: selectedDefaulters,
+        message: reminderMessage,
+        method: 'sms'
+      });
+      
+      toast.success(`Reminders sent to ${selectedDefaulters.length} parents`);
+      setShowReminderDialog(false);
+      setSelectedDefaulters([]);
+      
+      // Refresh data
+      loadDefaulters();
+    } catch (error: any) {
+      console.error('Error sending reminders:', error);
+      toast.error(error.response?.data?.message || 'Failed to send reminders');
+    } finally {
+      setReminderLoading(false);
     }
   };
-  
-  const handleExport = () => {
-    const csvContent = [
-      ['Student ID', 'Student Name', 'Class', 'Roll No', 'Parent Name', 'Parent Phone', 'Amount Due', 'Due Date', 'Days Overdue', 'Status', 'Priority', 'Last Contact', 'Reminders Sent'],
-      ...filteredDefaulters.map(d => [
-        d.studentId,
-        d.studentName,
-        d.className,
-        d.rollNo,
-        d.parentName,
-        d.parentPhone,
-        `₹${d.amount.toLocaleString('en-IN')}`,
-        d.dueDate,
-        d.daysOverdue,
-        d.status,
-        d.priority,
-        d.lastContact,
-        d.remindersSent
-      ])
-    ].map(row => row.join(',')).join('\n');
-    
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fee-defaulters-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+
+  // Export to CSV
+  const handleExport = async () => {
+    setExportLoading(true);
+    try {
+      const params: any = {
+        search: searchTerm || undefined,
+        className: selectedClass !== 'All Classes' ? selectedClass : undefined,
+        status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
+        priority: selectedPriority !== 'All Priorities' ? selectedPriority.split(' ')[0] : undefined,
+        daysOverdue: daysOverdueFilter !== 'All' ? daysOverdueFilter : undefined,
+      };
+
+      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+
+      const blob = await feeDefaultersService.exportFeeDefaulters(params);
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fee-defaulters-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Export completed successfully');
+    } catch (error: any) {
+      console.error('Error exporting:', error);
+      toast.error(error.response?.data?.message || 'Failed to export');
+    } finally {
+      setExportLoading(false);
+    }
   };
-  
+
+  // Mark as paid
+  const handleMarkAsPaid = async () => {
+    if (!selectedDefaulter) return;
+    
+    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    try {
+      await feeDefaultersService.markAsPaid(
+        selectedDefaulter.admissionNumber,
+        parseFloat(paymentAmount),
+        paymentMethod,
+        paymentNotes
+      );
+      
+      toast.success(`Payment of ₹${paymentAmount} recorded for ${selectedDefaulter.studentName}`);
+      setShowMarkPaidDialog(false);
+      setPaymentAmount('');
+      setPaymentNotes('');
+      
+      // Refresh data
+      loadDefaulters();
+      if (showDetailsDialog) {
+        loadDefaulterDetails(selectedDefaulter.admissionNumber);
+      }
+    } catch (error: any) {
+      console.error('Error marking as paid:', error);
+      toast.error(error.response?.data?.message || 'Failed to record payment');
+    }
+  };
+
+  // Helper functions
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Critical':
         return (
-          <Badge className="bg-red-50 text-red-700 border-red-200">
+          <Badge className="bg-red-50 text-red-700 border-red-200 hover:bg-red-50">
             <ShieldAlert className="h-3 w-3 mr-1" />
             Critical
           </Badge>
         );
       case 'High':
         return (
-          <Badge className="bg-orange-50 text-orange-700 border-orange-200">
+          <Badge className="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50">
             <AlertCircle className="h-3 w-3 mr-1" />
             High
           </Badge>
         );
       case 'Moderate':
         return (
-          <Badge className="bg-amber-50 text-amber-700 border-amber-200">
+          <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50">
             <Clock className="h-3 w-3 mr-1" />
             Moderate
           </Badge>
         );
       case 'Low':
         return (
-          <Badge className="bg-blue-50 text-blue-700 border-blue-200">
+          <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50">
             <Bell className="h-3 w-3 mr-1" />
             Low
           </Badge>
@@ -376,7 +379,7 @@ const FeeDefaulters = () => {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-  
+
   const getPriorityColor = (priority: number) => {
     switch (priority) {
       case 1: return 'text-red-600 bg-red-50 border-red-200';
@@ -386,29 +389,43 @@ const FeeDefaulters = () => {
       default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
   };
-  
-  const toggleSelectDefaulter = (id: number) => {
+
+  const toggleSelectDefaulter = (admissionNumber: string) => {
     setSelectedDefaulters(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+      prev.includes(admissionNumber) 
+        ? prev.filter(item => item !== admissionNumber) 
+        : [...prev, admissionNumber]
     );
   };
-  
+
   const selectAllDefaulters = () => {
-    if (selectedDefaulters.length === filteredDefaulters.length) {
+    if (selectedDefaulters.length === defaulters.length) {
       setSelectedDefaulters([]);
     } else {
-      setSelectedDefaulters(filteredDefaulters.map(d => d.id));
+      setSelectedDefaulters(defaulters.map(d => d.admissionNumber));
     }
   };
-  
-  const handleCallParent = (phone: string, name: string) => {
-    alert(`Calling ${name} at ${phone}...`);
-  };
-  
-  const handleViewDetails = (defaulter: any) => {
-    setSelectedDefaulter(defaulter);
-    setShowDetails(true);
-  };
+
+  // Prepare chart data
+  const chartData = overdueDistribution.length > 0 
+    ? overdueDistribution 
+    : [
+        { range: '0-15 days', count: 0, amount: 0 },
+        { range: '16-30 days', count: 0, amount: 0 },
+        { range: '31-45 days', count: 0, amount: 0 },
+        { range: '45+ days', count: 0, amount: 0 },
+      ];
+
+  const classChartData = classWiseDistribution.length > 0
+    ? classWiseDistribution
+    : [];
+
+  // Filter options
+  const classOptions = ['All Classes', 'LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+  const statusOptions = ['All Status', 'Critical', 'High', 'Moderate', 'Low'];
+  const priorityOptions = ['All Priorities', 'Critical (1)', 'High (2)', 'Moderate (3)', 'Low (4)'];
+  const daysOptions = ['All', '0-15 days', '16-30 days', '31-45 days', '45+ days'];
+  const paymentMethods = ['cash', 'cheque', 'bank_transfer', 'online', 'card'];
 
   return (
     <div className="space-y-6 p-6">
@@ -427,7 +444,7 @@ const FeeDefaulters = () => {
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
-            onClick={handleRefresh}
+            onClick={loadDefaulters}
             disabled={loading}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -435,16 +452,28 @@ const FeeDefaulters = () => {
           </Button>
           
           <Button 
-            onClick={handleBulkReminders}
-            disabled={selectedDefaulters.length === 0}
+            onClick={() => setShowReminderDialog(true)}
+            disabled={selectedDefaulters.length === 0 || reminderLoading}
             className="bg-amber-600 hover:bg-amber-700"
           >
-            <MailWarning className="h-4 w-4 mr-2" />
+            {reminderLoading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <MailWarning className="h-4 w-4 mr-2" />
+            )}
             Send Reminders ({selectedDefaulters.length})
           </Button>
           
-          <Button variant="default" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-2" />
+          <Button 
+            variant="default" 
+            onClick={handleExport}
+            disabled={exportLoading || defaulters.length === 0}
+          >
+            {exportLoading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
             Export Report
           </Button>
         </div>
@@ -457,8 +486,8 @@ const FeeDefaulters = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-red-700">Total Overdue</p>
-                <p className="text-2xl font-bold text-red-900">{formatCurrency(totalAmount)}</p>
-                <p className="text-xs text-red-600 mt-1">Across {totalDefaulters} students</p>
+                <p className="text-2xl font-bold text-red-900">{formatCurrency(summary.totalAmount)}</p>
+                <p className="text-xs text-red-600 mt-1">Across {summary.totalDefaulters} students</p>
               </div>
               <div className="p-3 bg-red-100 rounded-full">
                 <DollarSign className="h-6 w-6 text-red-600" />
@@ -466,7 +495,7 @@ const FeeDefaulters = () => {
             </div>
             <div className="flex items-center gap-2 mt-4">
               <TrendingDown className="h-4 w-4 text-red-600" />
-              <p className="text-xs text-red-600">15% increase from last month</p>
+              <p className="text-xs text-red-600">Real-time data from database</p>
             </div>
           </CardContent>
         </Card>
@@ -476,14 +505,17 @@ const FeeDefaulters = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-orange-700">Critical Cases</p>
-                <p className="text-2xl font-bold text-orange-900">{criticalCount}</p>
+                <p className="text-2xl font-bold text-orange-900">{summary.criticalCount}</p>
                 <p className="text-xs text-orange-600 mt-1">Immediate action needed</p>
               </div>
               <div className="p-3 bg-orange-100 rounded-full">
                 <ShieldAlert className="h-6 w-6 text-orange-600" />
               </div>
             </div>
-            <Progress value={(criticalCount / totalDefaulters) * 100} className="h-2 mt-4 bg-orange-200" />
+            <Progress 
+              value={summary.totalDefaulters > 0 ? (summary.criticalCount / summary.totalDefaulters) * 100 : 0} 
+              className="h-2 mt-4 bg-orange-200" 
+            />
           </CardContent>
         </Card>
 
@@ -492,7 +524,7 @@ const FeeDefaulters = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-amber-700">Avg. Days Overdue</p>
-                <p className="text-2xl font-bold text-amber-900">{avgDaysOverdue.toFixed(0)} days</p>
+                <p className="text-2xl font-bold text-amber-900">{Math.round(summary.avgDaysOverdue)} days</p>
                 <p className="text-xs text-amber-600 mt-1">Across all defaulters</p>
               </div>
               <div className="p-3 bg-amber-100 rounded-full">
@@ -507,7 +539,7 @@ const FeeDefaulters = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-blue-700">Recovery Rate</p>
-                <p className="text-2xl font-bold text-blue-900">78%</p>
+                <p className="text-2xl font-bold text-blue-900">{summary.recoveryRate}%</p>
                 <p className="text-xs text-blue-600 mt-1">Successful collections</p>
               </div>
               <div className="p-3 bg-blue-100 rounded-full">
@@ -516,7 +548,7 @@ const FeeDefaulters = () => {
             </div>
             <div className="flex items-center gap-2 mt-4">
               <ArrowUpRight className="h-4 w-4 text-green-600" />
-              <p className="text-xs text-green-600">5% improvement</p>
+              <p className="text-xs text-green-600">Based on historical data</p>
             </div>
           </CardContent>
         </Card>
@@ -535,12 +567,12 @@ const FeeDefaulters = () => {
           <CardContent>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={overdueDistributionData}>
+                <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="range" />
                   <YAxis />
                   <Tooltip 
-                    formatter={(value) => [formatCurrency(value as number), 'Amount']}
+                    formatter={(value: number) => [formatCurrency(value), 'Amount']}
                     labelStyle={{ color: '#666' }}
                   />
                   <Legend />
@@ -562,69 +594,44 @@ const FeeDefaulters = () => {
           </CardHeader>
           <CardContent>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={classWiseData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="class" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="count" name="Student Count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="amount" name="Amount (₹ Lakhs)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {classChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={classChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="_id" />
+                    <YAxis />
+                    <Tooltip 
+                      formatter={(value: number) => [formatCurrency(value), 'Amount']}
+                    />
+                    <Legend />
+                    <Bar dataKey="count" name="Student Count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="totalAmount" name="Amount Overdue" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  No class-wise data available
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters and Actions */}
+      {/* Filters */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <CardTitle className="text-lg">Fee Defaulters Management</CardTitle>
-              <CardDescription>
-                {filteredDefaulters.length} accounts with overdue payments • Total: {formatCurrency(filteredDefaulters.reduce((sum, d) => sum + d.amount, 0))}
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={viewMode === 'table' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('table')}
-                >
-                  Table View
-                </Button>
-                <Button
-                  variant={viewMode === 'card' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('card')}
-                >
-                  Card View
-                </Button>
-              </div>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowReminderSettings(!showReminderSettings)}
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                Reminder Settings
-              </Button>
-            </div>
-          </div>
+          <CardTitle className="text-lg">Filter Defaulters</CardTitle>
+          <CardDescription>
+            {defaulters.length} accounts with overdue payments • Total: {formatCurrency(defaulters.reduce((sum, d) => sum + d.totalDue, 0))}
+          </CardDescription>
         </CardHeader>
-        
-        <CardContent className="space-y-4">
-          {/* Advanced Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="relative">
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="relative lg:col-span-2">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search defaulters..."
+                placeholder="Search by name, ID, or parent..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -678,114 +685,57 @@ const FeeDefaulters = () => {
               </SelectContent>
             </Select>
           </div>
-
-          {/* Reminder Settings */}
-          {showReminderSettings && (
-            <Card className="border-amber-200 bg-amber-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <MailOpen className="h-4 w-4" />
-                    Reminder Configuration
-                  </h4>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowReminderSettings(false)}
-                  >
-                    Hide
-                  </Button>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="reminder-message" className="text-sm mb-2 block">Reminder Message</Label>
-                    <textarea
-                      id="reminder-message"
-                      className="w-full p-3 border rounded-lg text-sm"
-                      rows={3}
-                      value={reminderMessage}
-                      onChange={(e) => setReminderMessage(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <Button variant="outline" size="sm">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      SMS
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Mail className="h-4 w-4 mr-2" />
-                      Email
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <PhoneCall className="h-4 w-4 mr-2" />
-                      Call
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Bulk Actions */}
-          {selectedDefaulters.length > 0 && (
-            <Card className="border-primary">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="select-all"
-                        checked={selectedDefaulters.length === filteredDefaulters.length}
-                        onCheckedChange={selectAllDefaulters}
-                      />
-                      <Label htmlFor="select-all" className="text-sm font-medium">
-                        {selectedDefaulters.length} students selected
-                      </Label>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Total due: {formatCurrency(filteredDefaulters.filter(d => selectedDefaulters.includes(d.id)).reduce((sum, d) => sum + d.amount, 0))}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Bulk SMS
-                    </Button>
-                    <Button size="sm" variant="outline">
-                      <Mail className="h-4 w-4 mr-2" />
-                      Bulk Email
-                    </Button>
-                    <Button size="sm" variant="default">
-                      <PhoneCall className="h-4 w-4 mr-2" />
-                      Schedule Calls
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          
+          {/* Amount Range Filter */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <Label htmlFor="min-amount">Minimum Amount</Label>
+              <Input
+                id="min-amount"
+                type="number"
+                placeholder="₹0"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="max-amount">Maximum Amount</Label>
+              <Input
+                id="max-amount"
+                type="number"
+                placeholder="₹100000"
+                value={maxAmount}
+                onChange={(e) => setMaxAmount(e.target.value)}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Defaulters List */}
+      {/* Defaulters Table */}
       <Card>
         <CardContent className="p-0">
-          {filteredDefaulters.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+              <p className="mt-4 text-muted-foreground">Loading defaulters...</p>
+            </div>
+          ) : defaulters.length === 0 ? (
             <div className="text-center py-12">
               <div className="mx-auto w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
               <h3 className="text-lg font-medium mb-2">No defaulters found!</h3>
-              <p className="text-muted-foreground">All payments are up to date</p>
+              <p className="text-muted-foreground">All payments are up to date or no students match your filters</p>
             </div>
-          ) : viewMode === 'table' ? (
+          ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
                     <TableHead className="w-12">
                       <Checkbox
-                        checked={selectedDefaulters.length === filteredDefaulters.length}
+                        checked={selectedDefaulters.length === defaulters.length && defaulters.length > 0}
                         onCheckedChange={selectAllDefaulters}
                       />
                     </TableHead>
@@ -793,38 +743,38 @@ const FeeDefaulters = () => {
                     <TableHead>Class</TableHead>
                     <TableHead>Parent Contact</TableHead>
                     <TableHead>Amount Due</TableHead>
-                    <TableHead>Due Date</TableHead>
                     <TableHead>Overdue</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Last Contact</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredDefaulters.map((defaulter) => (
-                    <TableRow key={defaulter.id} className="hover:bg-muted/50">
+                  {defaulters.map((defaulter) => (
+                    <TableRow key={defaulter.admissionNumber} className="hover:bg-muted/50">
                       <TableCell>
                         <Checkbox
-                          checked={selectedDefaulters.includes(defaulter.id)}
-                          onCheckedChange={() => toggleSelectDefaulter(defaulter.id)}
+                          checked={selectedDefaulters.includes(defaulter.admissionNumber)}
+                          onCheckedChange={() => toggleSelectDefaulter(defaulter.admissionNumber)}
                         />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className={`h-8 w-8 ${defaulter.avatarColor}`}>
-                            <AvatarFallback className={defaulter.avatarColor.split(' ')[1]}>
+                          <Avatar className="h-8 w-8 bg-blue-100 text-blue-600">
+                            <AvatarFallback className="bg-blue-100 text-blue-600">
                               {defaulter.studentName.split(' ').map(n => n[0]).join('')}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <div className="font-medium">{defaulter.studentName}</div>
                             <div className="text-sm text-muted-foreground">
-                              ID: {defaulter.studentId} • Roll: {defaulter.rollNo}
+                              {defaulter.admissionNumber} • Roll: {defaulter.rollNo || 'N/A'}
                             </div>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{defaulter.className}</Badge>
+                        <Badge variant="outline">{defaulter.className}{defaulter.section ? `-${defaulter.section}` : ''}</Badge>
                       </TableCell>
                       <TableCell>
                         <div>
@@ -836,17 +786,9 @@ const FeeDefaulters = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-bold text-red-600">{formatCurrency(defaulter.amount)}</div>
-                        <div className="text-xs text-muted-foreground">Priority: 
-                          <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${getPriorityColor(defaulter.priority)}`}>
-                            {defaulter.priority}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">{defaulter.dueDate}</div>
+                        <div className="font-bold text-red-600">{formatCurrency(defaulter.totalDue)}</div>
                         <div className="text-xs text-muted-foreground">
-                          Last contact: {defaulter.lastContact}
+                          Total: {formatCurrency(defaulter.totalFee)} • Paid: {formatCurrency(defaulter.totalPaid)}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -861,28 +803,30 @@ const FeeDefaulters = () => {
                       </TableCell>
                       <TableCell>{getStatusBadge(defaulter.status)}</TableCell>
                       <TableCell>
+                        <div className="text-sm">
+                          {defaulter.lastContact || 'No contact yet'}
+                        </div>
+                        {defaulter.lastPaymentDate && (
+                          <div className="text-xs text-muted-foreground">
+                            Last payment: {new Date(defaulter.lastPaymentDate).toLocaleDateString()}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleSendReminder(defaulter)}
+                            onClick={() => loadDefaulterDetails(defaulter.admissionNumber)}
                           >
-                            <Send className="h-3 w-3 mr-1" />
-                            Remind
+                            <Eye className="h-3 w-3" />
                           </Button>
                           <Button 
                             size="sm" 
                             variant="outline"
-                            onClick={() => handleCallParent(defaulter.parentPhone, defaulter.parentName)}
+                            onClick={() => window.open(`tel:${defaulter.parentPhone}`)}
                           >
                             <Phone className="h-3 w-3" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="ghost"
-                            onClick={() => handleViewDetails(defaulter)}
-                          >
-                            <Eye className="h-3 w-3" />
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -891,21 +835,27 @@ const FeeDefaulters = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <MessageCircle className="h-4 w-4 mr-2" />
-                                Send Custom Message
+                              <DropdownMenuItem onClick={() => loadDefaulterDetails(defaulter.admissionNumber)}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <History className="h-4 w-4 mr-2" />
-                                View Payment History
+                              <DropdownMenuItem onClick={() => window.open(`tel:${defaulter.parentPhone}`)}>
+                                <PhoneCall className="h-4 w-4 mr-2" />
+                                Call Parent
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <FileText className="h-4 w-4 mr-2" />
-                                Generate Payment Plan
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedDefaulter(defaulter);
+                                setShowMarkPaidDialog(true);
+                              }}>
+                                <CreditCard className="h-4 w-4 mr-2" />
+                                Mark as Paid
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <ShieldAlert className="h-4 w-4 mr-2" />
-                                Escalate to Management
+                              <DropdownMenuItem onClick={() => {
+                                navigator.clipboard.writeText(`Dear parent, your ward ${defaulter.studentName} has an outstanding fee of ${formatCurrency(defaulter.totalDue)}. Kindly clear it at the earliest.`);
+                                toast.success('Reminder message copied to clipboard');
+                              }}>
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                Copy Reminder Text
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -916,203 +866,385 @@ const FeeDefaulters = () => {
                 </TableBody>
               </Table>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-              {filteredDefaulters.map((defaulter) => (
-                <Card key={defaulter.id} className="hover:shadow-lg transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar className={`h-10 w-10 ${defaulter.avatarColor}`}>
-                          <AvatarFallback className={defaulter.avatarColor.split(' ')[1]}>
-                            {defaulter.studentName.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-medium">{defaulter.studentName}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {defaulter.className} • Roll: {defaulter.rollNo}
-                          </div>
-                        </div>
-                      </div>
-                      {getStatusBadge(defaulter.status)}
-                    </div>
-                    
-                    <Separator className="my-3" />
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Parent:</span>
-                        <span className="font-medium">{defaulter.parentName}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Phone:</span>
-                        <span className="font-medium">{defaulter.parentPhone}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Amount Due:</span>
-                        <span className="font-bold text-red-600">{formatCurrency(defaulter.amount)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Overdue:</span>
-                        <span className="font-medium">{defaulter.daysOverdue} days</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Reminders:</span>
-                        <span className="font-medium">{defaulter.remindersSent} sent</span>
-                      </div>
-                    </div>
-                    
-                    <Separator className="my-3" />
-                    
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleSendReminder(defaulter)}
-                      >
-                        <Send className="h-3 w-3 mr-1" />
-                        Remind
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleCallParent(defaulter.parentPhone, defaulter.parentName)}
-                      >
-                        <Phone className="h-3 w-3 mr-1" />
-                        Call
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleViewDetails(defaulter)}
-                      >
-                        <Eye className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+          )}
+          
+          {/* Pagination */}
+          {!loading && defaulters.length > 0 && (
+            <div className="flex items-center justify-between p-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Showing {(page - 1) * limit + 1} to {Math.min(page * limit, summary.totalDefaulters)} of {summary.totalDefaulters} defaulters
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={page === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Defaulter Details Modal */}
-      {showDetails && selectedDefaulter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Defaulter Details</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setShowDetails(false)}>
-                  ✕
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <Avatar className={`h-16 w-16 ${selectedDefaulter.avatarColor}`}>
-                    <AvatarFallback className={selectedDefaulter.avatarColor.split(' ')[1]}>
-                      {selectedDefaulter.studentName.split(' ').map((n: string) => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="text-xl font-bold">{selectedDefaulter.studentName}</h3>
-                    <p className="text-muted-foreground">ID: {selectedDefaulter.studentId} • Class: {selectedDefaulter.className}</p>
+      {/* Reminder Dialog */}
+      <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Reminders</DialogTitle>
+            <DialogDescription>
+              Send payment reminders to {selectedDefaulters.length} selected parents
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="reminder-method">Reminder Method</Label>
+              <Select defaultValue="sms">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sms">SMS</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="reminder-message">Message</Label>
+              <Textarea
+                id="reminder-message"
+                rows={4}
+                value={reminderMessage}
+                onChange={(e) => setReminderMessage(e.target.value)}
+                placeholder="Enter reminder message..."
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                This message will be sent to all selected parents
+              </p>
+            </div>
+            
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+              <p className="text-sm text-amber-800">
+                <strong>Note:</strong> This will send real reminders to parents. Make sure the message is appropriate.
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReminderDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSendReminders}
+              disabled={reminderLoading}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {reminderLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Send Reminders
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Defaulter Details Dialog */}
+      <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Defaulter Details</DialogTitle>
+            <DialogDescription>
+              Complete information and payment history
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedDefaulter && (
+            <div className="space-y-6">
+              {/* Student Info */}
+              <div className="flex items-start gap-4">
+                <Avatar className="h-16 w-16 bg-blue-100 text-blue-600">
+                  <AvatarFallback className="bg-blue-100 text-blue-600">
+                    {selectedDefaulter.studentName.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold">{selectedDefaulter.studentName}</h3>
+                  <div className="flex flex-wrap gap-4 mt-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Admission No.</p>
+                      <p className="font-medium">{selectedDefaulter.admissionNumber}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Class</p>
+                      <Badge variant="outline">{selectedDefaulter.className}{selectedDefaulter.section ? `-${selectedDefaulter.section}` : ''}</Badge>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Roll No.</p>
+                      <p className="font-medium">{selectedDefaulter.rollNo || 'N/A'}</p>
+                    </div>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+                {getStatusBadge(selectedDefaulter.status)}
+              </div>
+
+              <Separator />
+
+              {/* Payment Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground">Total Fee</p>
+                    <p className="text-xl font-bold">{formatCurrency(selectedDefaulter.totalFee)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground">Total Paid</p>
+                    <p className="text-xl font-bold text-green-600">{formatCurrency(selectedDefaulter.totalPaid)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground">Total Due</p>
+                    <p className="text-xl font-bold text-red-600">{formatCurrency(selectedDefaulter.totalDue)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground">Days Overdue</p>
+                    <p className="text-xl font-bold text-amber-600">{selectedDefaulter.daysOverdue} days</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Parent Information */}
+              <div>
+                <h4 className="font-medium mb-3">Parent Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Parent Name</p>
                     <p className="font-medium">{selectedDefaulter.parentName}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Contact</p>
+                    <p className="text-sm text-muted-foreground">Phone Number</p>
                     <p className="font-medium">{selectedDefaulter.parentPhone}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
+                    <p className="text-sm text-muted-foreground">Email Address</p>
                     <p className="font-medium">{selectedDefaulter.parentEmail}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Roll No</p>
-                    <p className="font-medium">{selectedDefaulter.rollNo}</p>
+                    <p className="text-sm text-muted-foreground">Last Contact</p>
+                    <p className="font-medium">{selectedDefaulter.lastContact || 'No contact yet'}</p>
                   </div>
-                </div>
-                
-                <Separator />
-                
-                <div>
-                  <h4 className="font-medium mb-3">Overdue Payment Details</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Amount Due</p>
-                      <p className="text-2xl font-bold text-red-600">{formatCurrency(selectedDefaulter.amount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Due Date</p>
-                      <p className="font-medium">{selectedDefaulter.dueDate}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Days Overdue</p>
-                      <p className="font-medium">{selectedDefaulter.daysOverdue} days</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Status</p>
-                      {getStatusBadge(selectedDefaulter.status)}
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Priority</p>
-                      <Badge className={getPriorityColor(selectedDefaulter.priority)}>
-                        Priority {selectedDefaulter.priority}
-                      </Badge>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Reminders Sent</p>
-                      <p className="font-medium">{selectedDefaulter.remindersSent}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <Separator />
-                
-                <div>
-                  <h4 className="font-medium mb-3">Communication History</h4>
-                  <div className="space-y-2">
-                    <div className="p-3 border rounded-lg">
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="font-medium">Last Contact</span>
-                        <span className="text-muted-foreground">{selectedDefaulter.lastContact}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{selectedDefaulter.notes}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  <Button className="flex-1" onClick={() => handleSendReminder(selectedDefaulter)}>
-                    <Send className="h-4 w-4 mr-2" />
-                    Send Reminder
-                  </Button>
-                  <Button variant="outline" className="flex-1">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Create Payment Plan
-                  </Button>
-                  <Button variant="outline" className="flex-1">
-                    <History className="h-4 w-4 mr-2" />
-                    View History
-                  </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+
+              {/* Due Installments */}
+              {selectedDefaulter.dueInstallments && selectedDefaulter.dueInstallments.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3">Due Installments</h4>
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Component</TableHead>
+                          <TableHead>Total Amount</TableHead>
+                          <TableHead>Paid Amount</TableHead>
+                          <TableHead>Due Amount</TableHead>
+                          <TableHead>Due Date</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedDefaulter.dueInstallments.map((installment, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{installment.componentName}</TableCell>
+                            <TableCell>{formatCurrency(installment.amount)}</TableCell>
+                            <TableCell>{formatCurrency(installment.paidAmount)}</TableCell>
+                            <TableCell className="text-red-600 font-medium">
+                              {formatCurrency(installment.dueAmount)}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(installment.dueDate).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={installment.status === 'completed' ? 'default' : 'secondary'}>
+                                {installment.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Recent Payments */}
+              {selectedDefaulter.recentPayments && selectedDefaulter.recentPayments.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3">Recent Payments</h4>
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Receipt No.</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Method</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedDefaulter.recentPayments.map((payment, index) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-mono">{payment.receiptNumber}</TableCell>
+                            <TableCell>
+                              {new Date(payment.paymentDate).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-green-600 font-medium">
+                              {formatCurrency(payment.amount)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{payment.paymentMethod}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4">
+                <Button 
+                  className="flex-1"
+                  onClick={() => window.open(`tel:${selectedDefaulter.parentPhone}`)}
+                >
+                  <Phone className="h-4 w-4 mr-2" />
+                  Call Parent
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`Dear parent, your ward ${selectedDefaulter.studentName} has an outstanding fee of ${formatCurrency(selectedDefaulter.totalDue)}. Kindly clear it at the earliest.`);
+                    toast.success('Reminder message copied to clipboard');
+                  }}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Copy Reminder
+                </Button>
+                <Button 
+                  variant="default"
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  onClick={() => {
+                    setShowMarkPaidDialog(true);
+                    setShowDetailsDialog(false);
+                  }}
+                >
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Mark as Paid
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Mark as Paid Dialog */}
+      <Dialog open={showMarkPaidDialog} onOpenChange={setShowMarkPaidDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Record payment for {selectedDefaulter?.studentName}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                Total Due: <span className="font-bold">{formatCurrency(selectedDefaulter?.totalDue || 0)}</span>
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="payment-amount">Amount Received *</Label>
+              <Input
+                id="payment-amount"
+                type="number"
+                placeholder="Enter amount"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="payment-method">Payment Method</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethods.map(method => (
+                    <SelectItem key={method} value={method}>
+                      {method.charAt(0).toUpperCase() + method.slice(1).replace('_', ' ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="payment-notes">Notes (Optional)</Label>
+              <Textarea
+                id="payment-notes"
+                rows={3}
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                placeholder="Add any notes about this payment..."
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMarkPaidDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleMarkAsPaid}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Record Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -17,6 +17,8 @@ export interface Payment {
 }
 
 export interface StudentFeeDetails {
+  summary: any;
+  feeStructure: any;
   data: any;
   feeSummary: any;
   studentId: string;
@@ -68,7 +70,9 @@ export const FinanceService = {
   },
 
   // ✅ 3. Record Payment API
-  recordPayment: async (paymentData: any): Promise<ApiResponse<{ receiptNumber: string }>> => {
+  recordPayment: async (paymentData: any): Promise<ApiResponse<{
+    receiptNo: string; receiptNumber: string 
+}>> => {
     const response = await apiHelpers.post('/finance/payments/record', paymentData);
     return {
       data: response.data,

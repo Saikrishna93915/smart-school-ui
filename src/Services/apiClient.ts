@@ -290,6 +290,8 @@ export default apiClient;
 // Type exports for better TypeScript support
 export type { AxiosRequestConfig, AxiosResponse };
 export type ApiResponse<T = any> = {
+  students: boolean;
+  message: string | null;
   receiptNumber: string | undefined;
   data: T | null;
   error: string | null;

@@ -26,7 +26,8 @@ import {
   Building,
   FileSignature,
   MoreVertical,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import {
   Select,
@@ -58,7 +59,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer
 } from 'recharts';
@@ -82,11 +83,11 @@ interface Payment {
   netAmount: number;
   paymentMethod: string;
   transactionId?: string;
-  status: 'completed' | 'pending' | 'failed';
+  status: 'completed' | 'pending' | 'failed' | string;
   paymentDate: string;
   parentName: string;
   parentPhone: string;
-  recordedBy: {
+  recordedBy?: {
     name: string;
     email: string;
     username: string;
@@ -97,12 +98,16 @@ interface Payment {
   chequeNo?: string;
   utrNo?: string;
   referenceNo?: string;
+  totalAmount?: number;
+  paidAmount?: number;
+  dueAmount?: number;
 }
 
 // Interface for API Response
 interface PaymentHistoryResponse {
   success: boolean;
-  data: {
+  payments?: Payment[];
+  data?: {
     payments: Payment[];
     pagination: {
       page: number;
@@ -110,7 +115,7 @@ interface PaymentHistoryResponse {
       total: number;
       pages: number;
     };
-    summary: {
+    summary?: {
       totalAmount: number;
       totalTransactions: number;
       completedPayments: number;
@@ -129,12 +134,18 @@ interface PaymentHistoryResponse {
       date: string;
     }>;
   };
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
 }
 
 // Interface for Statistics
 interface StatisticsResponse {
   success: boolean;
-  data: {
+  data?: {
     today: {
       totalAmount: number;
       count: number;
@@ -143,7 +154,7 @@ interface StatisticsResponse {
       totalAmount: number;
       count: number;
     };
-    thisYear: {
+    thisYear?: {
       totalAmount: number;
       count: number;
     };
@@ -158,6 +169,14 @@ interface StatisticsResponse {
       count: number;
     }>;
   };
+  today?: {
+    totalAmount: number;
+    count: number;
+  };
+  thisMonth?: {
+    totalAmount: number;
+    count: number;
+  };
 }
 
 const PaymentHistoryPage = () => {
@@ -165,9 +184,9 @@ const PaymentHistoryPage = () => {
   
   // State
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMethod, setSelectedMethod] = useState('All Methods');
-  const [selectedStatus, setSelectedStatus] = useState('All Status');
-  const [selectedClass, setSelectedClass] = useState('All Classes');
+  const [selectedMethod, setSelectedMethod] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedClass, setSelectedClass] = useState('all');
   const [dateRange, setDateRange] = useState({
     start: '',
     end: ''
@@ -192,11 +211,12 @@ const PaymentHistoryPage = () => {
   });
   const [statistics, setStatistics] = useState({
     today: { totalAmount: 0, count: 0 },
-    thisMonth: { totalAmount: 0, count: 0 },
-    thisYear: { totalAmount: 0, count: 0 }
+    thisMonth: { totalAmount: 0, count: 0 }
   });
   const [weeklyTrend, setWeeklyTrend] = useState<any[]>([]);
   const [methodDistribution, setMethodDistribution] = useState<any[]>([]);
+  const [methodOptions, setMethodOptions] = useState<string[]>(['cash', 'cheque', 'bank_transfer', 'upi', 'card', 'online']);
+  const [classOptions, setClassOptions] = useState<string[]>([]);
   
   // Fetch payment history
   const fetchPaymentHistory = async (page = 1) => {
@@ -213,13 +233,15 @@ const PaymentHistoryPage = () => {
       // Build query params
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
-      if (selectedMethod !== 'All Methods') params.append('paymentMethod', selectedMethod);
-      if (selectedStatus !== 'All Status') params.append('status', selectedStatus);
-      if (selectedClass !== 'All Classes') params.append('className', selectedClass);
+      if (selectedMethod !== 'all') params.append('paymentMethod', selectedMethod);
+      if (selectedStatus !== 'all') params.append('status', selectedStatus);
+      if (selectedClass !== 'all') params.append('className', selectedClass);
       if (dateRange.start) params.append('startDate', dateRange.start);
       if (dateRange.end) params.append('endDate', dateRange.end);
       params.append('page', page.toString());
       params.append('limit', pagination.limit.toString());
+      
+      console.log('📤 GET', `${API_BASE_URL}/history/payments?${params.toString()}`);
       
       const response = await fetch(`${API_BASE_URL}/history/payments?${params.toString()}`, {
         headers: {
@@ -239,19 +261,87 @@ const PaymentHistoryPage = () => {
       }
       
       const data: PaymentHistoryResponse = await response.json();
+      console.log('📊 Payment history response:', data);
       
       if (data.success) {
-        setPayments(data.data.payments);
-        setPagination(data.data.pagination);
-        setSummary(data.data.summary);
-        if (data.data.weeklyTrend) setWeeklyTrend(data.data.weeklyTrend);
-        if (data.data.methodDistribution) setMethodDistribution(data.data.methodDistribution);
+        // Handle different response structures
+        let paymentsData: Payment[] = [];
+        let paginationData = data.pagination;
+        
+        if (Array.isArray(data.payments)) {
+          paymentsData = data.payments;
+        } else if (data.data?.payments) {
+          paymentsData = data.data.payments;
+          paginationData = data.data.pagination;
+        }
+        
+        // Process payments to ensure all fields exist
+        const processedPayments = paymentsData.map(payment => ({
+          ...payment,
+          paymentMethod: payment.paymentMethod || 'cash',
+          status: payment.status || 'completed',
+          netAmount: payment.netAmount || payment.amount || payment.totalAmount || 0,
+          amount: payment.amount || payment.totalAmount || 0,
+          discount: payment.discount || 0,
+          lateFee: payment.lateFee || 0,
+          studentName: payment.studentName || 'Unknown Student',
+          admissionNumber: payment.admissionNumber || 'N/A',
+          className: payment.className || 'Unknown',
+          section: payment.section || 'A',
+          parentName: payment.parentName || 'N/A',
+          parentPhone: payment.parentPhone || 'N/A',
+          recordedByName: payment.recordedByName || payment.recordedBy?.name || 'System'
+        }));
+        
+        setPayments(processedPayments);
+        
+        if (paginationData) {
+          setPagination(paginationData);
+        }
+        
+        // Calculate summary if not provided
+        if (data.data?.summary) {
+          setSummary(data.data.summary);
+        } else {
+          const totalAmount = processedPayments.reduce((sum, p) => sum + p.netAmount, 0);
+          const totalTransactions = processedPayments.length;
+          const completedPayments = processedPayments.filter(p => p.status === 'completed').length;
+          const successRate = totalTransactions > 0 ? (completedPayments / totalTransactions) * 100 : 0;
+          const avgTransaction = totalTransactions > 0 ? totalAmount / totalTransactions : 0;
+          
+          setSummary({
+            totalAmount,
+            totalTransactions,
+            completedPayments,
+            successRate,
+            avgTransaction
+          });
+        }
+        
+        // Extract unique payment methods and classes
+        const methods = Array.from(new Set(processedPayments.map(p => p.paymentMethod).filter(Boolean)));
+        const classes = Array.from(new Set(processedPayments.map(p => p.className).filter(Boolean)));
+        
+        if (methods.length > 0) setMethodOptions(['all', ...methods]);
+        if (classes.length > 0) setClassOptions(['all', ...classes]);
+        
+        // Calculate method distribution
+        const distribution = methods.map(method => {
+          const methodPayments = processedPayments.filter(p => p.paymentMethod === method);
+          return {
+            _id: method,
+            count: methodPayments.length,
+            totalAmount: methodPayments.reduce((sum, p) => sum + p.netAmount, 0)
+          };
+        });
+        setMethodDistribution(distribution);
+        
       } else {
         toast.error('Failed to fetch payment history');
       }
-    } catch (error) {
-      console.error('Error fetching payment history:', error);
-      toast.error('Error loading payment history');
+    } catch (error: any) {
+      console.error('❌ Error fetching payment history:', error);
+      toast.error(`Error loading payment history: ${error.message}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -264,6 +354,8 @@ const PaymentHistoryPage = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       
+      console.log('📤 GET', `${API_BASE_URL}/history/statistics`);
+      
       const response = await fetch(`${API_BASE_URL}/history/statistics`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -274,12 +366,25 @@ const PaymentHistoryPage = () => {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       
       const data: StatisticsResponse = await response.json();
+      console.log('📊 Statistics response:', data);
       
       if (data.success) {
-        setStatistics(data.data);
+        // Handle different response structures
+        if (data.data) {
+          setStatistics({
+            today: data.data.today || { totalAmount: 0, count: 0 },
+            thisMonth: data.data.thisMonth || { totalAmount: 0, count: 0 }
+          });
+        } else if (data.today || data.thisMonth) {
+          setStatistics({
+            today: data.today || { totalAmount: 0, count: 0 },
+            thisMonth: data.thisMonth || { totalAmount: 0, count: 0 }
+          });
+        }
       }
-    } catch (error) {
-      console.error('Error fetching statistics:', error);
+    } catch (error: any) {
+      console.error('❌ Error fetching statistics:', error);
+      // Continue without statistics - they're not critical
     }
   };
   
@@ -292,22 +397,31 @@ const PaymentHistoryPage = () => {
         return;
       }
       
+      toast.loading('Preparing export...');
+      
       // Build query params for export
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
-      if (selectedMethod !== 'All Methods') params.append('paymentMethod', selectedMethod);
-      if (selectedStatus !== 'All Status') params.append('status', selectedStatus);
-      if (selectedClass !== 'All Classes') params.append('className', selectedClass);
+      if (selectedMethod !== 'all') params.append('paymentMethod', selectedMethod);
+      if (selectedStatus !== 'all') params.append('status', selectedStatus);
+      if (selectedClass !== 'all') params.append('className', selectedClass);
       if (dateRange.start) params.append('startDate', dateRange.start);
       if (dateRange.end) params.append('endDate', dateRange.end);
       
-      const response = await fetch(`${API_BASE_URL}/history/export?${params.toString()}`, {
+      const response = await fetch(`${API_BASE_URL}/finance/payments/export?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       
-      if (!response.ok) throw new Error(`Export failed: ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          // Fallback: generate CSV client-side
+          generateClientSideCSV();
+          return;
+        }
+        throw new Error(`Export failed: ${response.status}`);
+      }
       
       // Get filename from headers or generate one
       const contentDisposition = response.headers.get('Content-Disposition');
@@ -330,8 +444,71 @@ const PaymentHistoryPage = () => {
       window.URL.revokeObjectURL(url);
       
       toast.success('Export successful');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Export error:', error);
+      // Try client-side generation
+      generateClientSideCSV();
+    }
+  };
+  
+  // Client-side CSV generation fallback
+  const generateClientSideCSV = () => {
+    try {
+      const headers = [
+        'Receipt Number',
+        'Student Name',
+        'Admission Number',
+        'Class',
+        'Section',
+        'Amount',
+        'Discount',
+        'Late Fee',
+        'Net Amount',
+        'Payment Method',
+        'Status',
+        'Payment Date',
+        'Parent Name',
+        'Parent Phone',
+        'Collected By',
+        'Description'
+      ];
+      
+      const csvRows = [
+        headers.join(','),
+        ...payments.map(payment => [
+          `"${payment.receiptNumber || ''}"`,
+          `"${payment.studentName || ''}"`,
+          `"${payment.admissionNumber || ''}"`,
+          `"${payment.className || ''}"`,
+          `"${payment.section || ''}"`,
+          payment.amount,
+          payment.discount,
+          payment.lateFee,
+          payment.netAmount,
+          `"${payment.paymentMethod || ''}"`,
+          `"${payment.status || ''}"`,
+          `"${new Date(payment.paymentDate).toLocaleDateString()}"`,
+          `"${payment.parentName || ''}"`,
+          `"${payment.parentPhone || ''}"`,
+          `"${payment.recordedByName || ''}"`,
+          `"${payment.description || ''}"`
+        ].join(','))
+      ];
+      
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `payment-history-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Export completed (client-side)');
+    } catch (error) {
+      console.error('Client-side export error:', error);
       toast.error('Export failed');
     }
   };
@@ -358,9 +535,9 @@ const PaymentHistoryPage = () => {
   // Reset filters
   const resetFilters = () => {
     setSearchTerm('');
-    setSelectedMethod('All Methods');
-    setSelectedStatus('All Status');
-    setSelectedClass('All Classes');
+    setSelectedMethod('all');
+    setSelectedStatus('all');
+    setSelectedClass('all');
     setDateRange({ start: '', end: '' });
     fetchPaymentHistory(1);
   };
@@ -383,20 +560,25 @@ const PaymentHistoryPage = () => {
   
   // Format date time
   const formatDateTime = (dateInput: string | Date): string => {
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return '';
-    return d.toLocaleString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    try {
+      const d = new Date(dateInput);
+      if (isNaN(d.getTime())) return 'Invalid Date';
+      return d.toLocaleString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
   
   // Get status badge
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const getStatusBadge = (status: string = 'completed') => {
+    const statusLower = status.toLowerCase();
+    switch (statusLower) {
       case 'completed':
         return (
           <Badge className="bg-green-50 text-green-700 border-green-200">
@@ -412,6 +594,7 @@ const PaymentHistoryPage = () => {
           </Badge>
         );
       case 'failed':
+      case 'rejected':
         return (
           <Badge className="bg-red-50 text-red-700 border-red-200">
             <XCircle className="h-3 w-3 mr-1" />
@@ -419,32 +602,36 @@ const PaymentHistoryPage = () => {
           </Badge>
         );
       default:
-        return <Badge variant="outline">Unknown</Badge>;
+        return <Badge variant="outline">{status}</Badge>;
     }
   };
   
   // Get payment method icon
-  const getPaymentMethodIcon = (method: string) => {
-    switch (method.toLowerCase()) {
+  const getPaymentMethodIcon = (method: string = 'cash') => {
+    const methodLower = (method || '').toLowerCase();
+    switch (methodLower) {
       case 'upi': return <Smartphone className="h-4 w-4" />;
       case 'cash': return <Wallet className="h-4 w-4" />;
       case 'card': return <CreditCard className="h-4 w-4" />;
       case 'bank transfer':
       case 'bank_transfer': return <Building className="h-4 w-4" />;
       case 'cheque': return <FileSignature className="h-4 w-4" />;
-      default: return <CreditCard className="h-4 w-4" />;
+      case 'online': return <CreditCard className="h-4 w-4" />;
+      default: return <Wallet className="h-4 w-4" />;
     }
   };
   
-  // Get payment method color
-  const getPaymentMethodColor = (method: string) => {
-    switch (method.toLowerCase()) {
+  // FIXED: Get payment method color - Safe with null checks
+  const getPaymentMethodColor = (method: string = 'cash') => {
+    const methodLower = (method || '').toLowerCase();
+    switch (methodLower) {
       case 'upi': return 'bg-blue-100 text-blue-600';
       case 'cash': return 'bg-green-100 text-green-600';
       case 'card': return 'bg-purple-100 text-purple-600';
       case 'bank transfer':
       case 'bank_transfer': return 'bg-amber-100 text-amber-600';
       case 'cheque': return 'bg-red-100 text-red-600';
+      case 'online': return 'bg-indigo-100 text-indigo-600';
       default: return 'bg-gray-100 text-gray-600';
     }
   };
@@ -461,7 +648,7 @@ const PaymentHistoryPage = () => {
   };
   
   // Get avatar color based on student name
-  const getAvatarColor = (name: string) => {
+  const getAvatarColor = (name: string = 'Unknown') => {
     const colors = [
       'bg-pink-100 text-pink-600',
       'bg-blue-100 text-blue-600',
@@ -472,18 +659,58 @@ const PaymentHistoryPage = () => {
       'bg-cyan-100 text-cyan-600',
       'bg-indigo-100 text-indigo-600',
     ];
-    const index = name.charCodeAt(0) % colors.length;
+    const index = (name.charCodeAt(0) || 0) % colors.length;
     return colors[index];
   };
   
   // Get initials from name
-  const getInitials = (name: string) => {
+  const getInitials = (name: string = 'Unknown') => {
     return name
       .split(' ')
-      .map(part => part[0])
+      .map(part => part[0] || '')
       .join('')
       .toUpperCase()
-      .slice(0, 2);
+      .slice(0, 2) || '??';
+  };
+
+  // Format payment method for display
+  const formatPaymentMethod = (method: string = 'cash') => {
+    const methodLower = method.toLowerCase();
+    switch (methodLower) {
+      case 'bank_transfer': return 'Bank Transfer';
+      case 'upi': return 'UPI';
+      case 'card': return 'Card';
+      case 'cheque': return 'Cheque';
+      case 'online': return 'Online';
+      case 'cash': return 'Cash';
+      default: return method.charAt(0).toUpperCase() + method.slice(1);
+    }
+  };
+
+  // Get payment method options
+  const getPaymentMethodOptions = () => {
+    const options = ['all', ...methodOptions];
+    return options.map(method => ({
+      value: method,
+      label: method === 'all' ? 'All Methods' : formatPaymentMethod(method)
+    }));
+  };
+
+  // Get status options
+  const getStatusOptions = () => [
+    { value: 'all', label: 'All Status' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'failed', label: 'Failed' }
+  ];
+
+  // Get class options
+  const getClassOptions = () => {
+    const options = ['all', ...classOptions];
+    return options.map(cls => ({
+      value: cls,
+      label: cls === 'all' ? 'All Classes' : cls
+    }));
   };
 
   return (
@@ -514,14 +741,18 @@ const PaymentHistoryPage = () => {
             onClick={handleRefresh}
             disabled={loading || refreshing}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
             Refresh
           </Button>
           
           <Button 
             variant="default"
             onClick={handleExport}
-            disabled={loading}
+            disabled={loading || payments.length === 0}
           >
             <Download className="h-4 w-4 mr-2" />
             Export Report
@@ -616,37 +847,37 @@ const PaymentHistoryPage = () => {
         </Card>
       </div>
 
-      {/* Weekly Trend Chart */}
-      {weeklyTrend.length > 0 && (
+      {/* Method Distribution Chart */}
+      {methodDistribution.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              Weekly Payment Trend
+              Payment Method Distribution
             </CardTitle>
-            <CardDescription>Collection performance over the last week</CardDescription>
+            <CardDescription>Breakdown of payment methods used</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyTrend}>
+                <BarChart data={methodDistribution}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="day" />
+                  <XAxis dataKey="_id" />
                   <YAxis />
-                  <Tooltip 
+                  <RechartsTooltip 
                     formatter={(value) => [formatCurrency(value as number), 'Amount']}
                     labelStyle={{ color: '#666' }}
                   />
                   <Legend />
                   <Bar 
-                    dataKey="amount" 
+                    dataKey="totalAmount" 
                     name="Collection Amount" 
                     fill="#3b82f6" 
                     radius={[4, 4, 0, 0]} 
                   />
                   <Bar 
-                    dataKey="transactions" 
-                    name="Transactions" 
+                    dataKey="count" 
+                    name="Transaction Count" 
                     fill="#8b5cf6" 
                     radius={[4, 4, 0, 0]} 
                   />
@@ -665,7 +896,7 @@ const PaymentHistoryPage = () => {
               <CardTitle className="text-lg">Filter Transactions</CardTitle>
               <CardDescription>Refine your search to find specific payments</CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={resetFilters}>
+            <Button variant="outline" size="sm" onClick={resetFilters} disabled={loading}>
               Reset Filters
             </Button>
           </div>
@@ -680,10 +911,11 @@ const PaymentHistoryPage = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                disabled={loading}
               />
             </div>
             
-            <Select value={selectedMethod} onValueChange={setSelectedMethod}>
+            <Select value={selectedMethod} onValueChange={setSelectedMethod} disabled={loading}>
               <SelectTrigger>
                 <div className="flex items-center gap-2">
                   <Filter className="h-3 w-3" />
@@ -691,38 +923,37 @@ const PaymentHistoryPage = () => {
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="All Methods">All Methods</SelectItem>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="card">Card</SelectItem>
-                <SelectItem value="upi">UPI</SelectItem>
-                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                <SelectItem value="cheque">Cheque</SelectItem>
-                <SelectItem value="online">Online</SelectItem>
+                {getPaymentMethodOptions().map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+            <Select value={selectedStatus} onValueChange={setSelectedStatus} disabled={loading}>
               <SelectTrigger>
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="All Status">All Status</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
+                {getStatusOptions().map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             
-            <Select value={selectedClass} onValueChange={setSelectedClass}>
+            <Select value={selectedClass} onValueChange={setSelectedClass} disabled={loading}>
               <SelectTrigger>
                 <SelectValue placeholder="Class" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="All Classes">All Classes</SelectItem>
-                <SelectItem value="9th">9th</SelectItem>
-                <SelectItem value="10th">10th</SelectItem>
-                <SelectItem value="11th">11th</SelectItem>
-                <SelectItem value="12th">12th</SelectItem>
+                {getClassOptions().map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             
@@ -733,6 +964,7 @@ const PaymentHistoryPage = () => {
                   type="date"
                   value={dateRange.start}
                   onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  disabled={loading}
                 />
               </div>
               <div>
@@ -741,6 +973,7 @@ const PaymentHistoryPage = () => {
                   type="date"
                   value={dateRange.end}
                   onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -748,6 +981,9 @@ const PaymentHistoryPage = () => {
           
           <div className="flex justify-end mt-4">
             <Button onClick={applyFilters} disabled={loading}>
+              {loading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
               Apply Filters
             </Button>
           </div>
@@ -782,6 +1018,14 @@ const PaymentHistoryPage = () => {
               </div>
               <h3 className="text-lg font-medium mb-2">No payments found</h3>
               <p className="text-muted-foreground">Try adjusting your search or filter criteria</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => navigate('/finance/record-payment')}
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Record New Payment
+              </Button>
             </div>
           ) : (
             <>
@@ -817,7 +1061,9 @@ const PaymentHistoryPage = () => {
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <div className="font-medium">{payment.studentName}</div>
+                              <div className="font-medium truncate max-w-[150px]">
+                                {payment.studentName}
+                              </div>
                               <div className="text-sm text-muted-foreground">
                                 {payment.className} • {payment.admissionNumber}
                               </div>
@@ -837,15 +1083,15 @@ const PaymentHistoryPage = () => {
                             <div className={`p-1 rounded ${getPaymentMethodColor(payment.paymentMethod)}`}>
                               {getPaymentMethodIcon(payment.paymentMethod)}
                             </div>
-                            <span className="text-sm font-medium capitalize">
-                              {payment.paymentMethod.replace('_', ' ')}
+                            <span className="text-sm font-medium">
+                              {formatPaymentMethod(payment.paymentMethod)}
                             </span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">{formatDateTime(payment.paymentDate)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            by {payment.recordedByName || payment.recordedBy?.name || 'Unknown'}
+                          <div className="text-xs text-muted-foreground truncate max-w-[150px]">
+                            by {payment.recordedByName}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -881,16 +1127,20 @@ const PaymentHistoryPage = () => {
                                 >
                                   Copy Receipt Number
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => window.open(`tel:${payment.parentPhone}`)}
-                                >
-                                  Call Parent
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => navigator.clipboard.writeText(payment.parentPhone)}
-                                >
-                                  Copy Phone Number
-                                </DropdownMenuItem>
+                                {payment.parentPhone && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={() => window.open(`tel:${payment.parentPhone}`)}
+                                    >
+                                      Call Parent
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => navigator.clipboard.writeText(payment.parentPhone)}
+                                    >
+                                      Copy Phone Number
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -912,7 +1162,7 @@ const PaymentHistoryPage = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handlePageChange(pagination.page - 1)}
-                      disabled={pagination.page <= 1}
+                      disabled={pagination.page <= 1 || loading}
                     >
                       Previous
                     </Button>
@@ -920,7 +1170,7 @@ const PaymentHistoryPage = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handlePageChange(pagination.page + 1)}
-                      disabled={pagination.page >= pagination.pages}
+                      disabled={pagination.page >= pagination.pages || loading}
                     >
                       Next
                     </Button>
@@ -980,7 +1230,7 @@ const PaymentHistoryPage = () => {
                   <div>
                     <p className="text-sm text-muted-foreground">Collected By</p>
                     <p className="font-medium">
-                      {selectedPayment.recordedByName || selectedPayment.recordedBy?.name || 'Unknown'}
+                      {selectedPayment.recordedByName}
                     </p>
                   </div>
                   <div>
@@ -1027,8 +1277,8 @@ const PaymentHistoryPage = () => {
                         <div className={`p-2 rounded ${getPaymentMethodColor(selectedPayment.paymentMethod)}`}>
                           {getPaymentMethodIcon(selectedPayment.paymentMethod)}
                         </div>
-                        <span className="font-medium capitalize">
-                          {selectedPayment.paymentMethod.replace('_', ' ')}
+                        <span className="font-medium">
+                          {formatPaymentMethod(selectedPayment.paymentMethod)}
                         </span>
                       </div>
                     </div>

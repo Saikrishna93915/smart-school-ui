@@ -1,11 +1,11 @@
-// src/pages/finance/Collections.tsx
-import { useState } from 'react';
+// src/pages/finance/Collections.tsx - UPDATED VERSION
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 import {
   Search,
   Download,
@@ -26,7 +26,8 @@ import {
   FileText,
   Printer,
   Share2,
-  MoreVertical
+  MoreVertical,
+  Loader2
 } from 'lucide-react';
 import {
   Select,
@@ -65,175 +66,290 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
-// Mock data with more details
+// Import the service
+import { collectionsService, type Collection, type CollectionsResponse } from '@/Services/collectionsService';
+
+// Mock data for fallback
 const MOCK_COLLECTIONS = [
   {
-    id: 1,
+    _id: '1',
+    receiptNumber: 'REC001',
     studentId: 'STU2024001',
     studentName: 'Priya Patel',
     className: '10-A',
+    section: 'A',
     rollNo: '25',
-    amount: 15000,
-    paymentMethod: 'UPI',
-    status: 'completed',
-    date: '2024-11-10',
-    receiptNo: 'REC001',
-    collectedBy: 'Mr. Sharma',
-    notes: 'Full fee payment',
     parentName: 'Rakesh Patel',
     parentPhone: '+91 98765 43210',
     parentEmail: 'rakesh.patel@email.com',
-    avatarColor: 'bg-pink-100 text-pink-600'
-  },
-  {
-    id: 2,
-    studentId: 'STU2024002',
-    studentName: 'Amit Kumar',
-    className: '10-B',
-    rollNo: '12',
-    amount: 22500,
-    paymentMethod: 'Cash',
-    status: 'completed',
-    date: '2024-11-09',
-    receiptNo: 'REC002',
-    collectedBy: 'Ms. Gupta',
-    notes: 'Includes transport fee',
-    parentName: 'Suresh Kumar',
-    parentPhone: '+91 98765 43211',
-    parentEmail: 'suresh.kumar@email.com',
-    avatarColor: 'bg-blue-100 text-blue-600'
-  },
-  {
-    id: 3,
-    studentId: 'STU2024003',
-    studentName: 'Rahul Sharma',
-    className: '11-A',
-    rollNo: '08',
-    amount: 18000,
-    paymentMethod: 'Card',
-    status: 'pending',
-    date: '2024-11-09',
-    receiptNo: 'REC003',
-    collectedBy: 'Mr. Sharma',
-    notes: 'Installment payment',
-    parentName: 'Sunil Sharma',
-    parentPhone: '+91 98765 43212',
-    parentEmail: 'sunil.sharma@email.com',
-    avatarColor: 'bg-green-100 text-green-600'
-  },
-  {
-    id: 4,
-    studentId: 'STU2024004',
-    studentName: 'Meera Nair',
-    className: '9-A',
-    rollNo: '15',
-    amount: 12000,
-    paymentMethod: 'Bank Transfer',
-    status: 'completed',
-    date: '2024-11-08',
-    receiptNo: 'REC004',
-    collectedBy: 'Ms. Gupta',
-    notes: 'Tuition fee only',
-    parentName: 'Rajesh Nair',
-    parentPhone: '+91 98765 43213',
-    parentEmail: 'rajesh.nair@email.com',
-    avatarColor: 'bg-purple-100 text-purple-600'
-  },
-  {
-    id: 5,
-    studentId: 'STU2024005',
-    studentName: 'Karan Malhotra',
-    className: '10-B',
-    rollNo: '18',
-    amount: 8500,
-    paymentMethod: 'Cheque',
-    status: 'failed',
-    date: '2024-11-08',
-    receiptNo: 'REC005',
-    collectedBy: 'Mr. Sharma',
-    notes: 'Cheque bounced',
-    parentName: 'Sunil Malhotra',
-    parentPhone: '+91 98765 43214',
-    parentEmail: 'sunil.malhotra@email.com',
-    avatarColor: 'bg-amber-100 text-amber-600'
-  },
-  {
-    id: 6,
-    studentId: 'STU2024006',
-    studentName: 'Sneha Reddy',
-    className: '12-A',
-    rollNo: '03',
-    amount: 28000,
+    amount: 15000,
+    totalAmount: 15000,
+    paidAmount: 15000,
+    dueAmount: 0,
     paymentMethod: 'UPI',
-    status: 'completed',
-    date: '2024-11-07',
-    receiptNo: 'REC006',
-    collectedBy: 'Ms. Gupta',
-    notes: 'Final year fee',
-    parentName: 'Vikram Reddy',
-    parentPhone: '+91 98765 43215',
-    parentEmail: 'vikram.reddy@email.com',
-    avatarColor: 'bg-red-100 text-red-600'
+    paymentDate: '2024-11-10T10:30:00Z',
+    formattedDate: '2024-11-10',
+    status: 'completed' as const,
+    description: 'Full fee payment',
+    collectedBy: 'Mr. Sharma',
+    recordedById: '1',
+    createdAt: '2024-11-10T10:30:00Z',
+    updatedAt: '2024-11-10T10:30:00Z',
+    isDefaulterPayment: false,
+    notes: 'Full fee payment'
   },
-];
-
-// Chart data
-const monthlyData = [
-  { month: 'Aug', amount: 185000, transactions: 42 },
-  { month: 'Sep', amount: 210000, transactions: 48 },
-  { month: 'Oct', amount: 195000, transactions: 45 },
-  { month: 'Nov', amount: 235000, transactions: 52 },
-];
-
-const paymentMethodData = [
-  { name: 'UPI', value: 45, color: '#3b82f6' },
-  { name: 'Cash', value: 25, color: '#10b981' },
-  { name: 'Card', value: 15, color: '#8b5cf6' },
-  { name: 'Bank Transfer', value: 10, color: '#f59e0b' },
-  { name: 'Cheque', value: 5, color: '#ef4444' },
+  // ... rest of mock data (convert to match Collection interface)
 ];
 
 const Collections = () => {
+  // State management
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('All Classes');
   const [selectedStatus, setSelectedStatus] = useState('All Status');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('All Methods');
   const [selectedView, setSelectedView] = useState<'table' | 'card'>('table');
-  const [loading, setLoading] = useState(false);
-  const [selectedCollection, setSelectedCollection] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [selectedCollection, setSelectedCollection] = useState<Collection | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-
-  const collections = MOCK_COLLECTIONS;
-
-  // Calculate statistics
-  const totalAmount = collections.reduce((sum, item) => sum + item.amount, 0);
-  const completedCollections = collections.filter(item => item.status === 'completed');
-  const pendingCollections = collections.filter(item => item.status === 'pending');
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
+  const [statusUpdateNotes, setStatusUpdateNotes] = useState('');
+  const [newStatus, setNewStatus] = useState('completed');
   
-  const completedAmount = completedCollections.reduce((sum, item) => sum + item.amount, 0);
-  const pendingAmount = pendingCollections.reduce((sum, item) => sum + item.amount, 0);
-  const successRate = (completedCollections.length / collections.length) * 100;
+  // Data states
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [statistics, setStatistics] = useState({
+    totalAmount: 0,
+    totalCollections: 0,
+    completedAmount: 0,
+    completedCount: 0,
+    pendingAmount: 0,
+    pendingCount: 0,
+    successRate: 0
+  });
+  const [monthlyTrend, setMonthlyTrend] = useState<any[]>([]);
+  const [paymentMethodData, setPaymentMethodData] = useState<any[]>([]);
 
+  // Filter options
   const classOptions = ['All Classes', '9-A', '9-B', '10-A', '10-B', '11-A', '11-B', '12-A', '12-B'];
   const statusOptions = ['All Status', 'completed', 'pending', 'failed'];
+  const paymentMethodOptions = ['All Methods', 'cash', 'UPI', 'card', 'cheque', 'bank_transfer', 'online'];
+  const statusUpdateOptions = ['completed', 'pending', 'failed', 'cancelled', 'refunded'];
 
-  const handleRefresh = () => {
+  // Load collections data
+  const loadCollections = async () => {
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const params: any = {
+        search: searchTerm || undefined,
+        className: selectedClass !== 'All Classes' ? selectedClass : undefined,
+        status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
+        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter : undefined,
+        page: 1,
+        limit: 50,
+        sortBy: 'paymentDate',
+        sortOrder: 'desc'
+      };
+
+      // Remove undefined values
+      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+
+      const response = await collectionsService.getCollections(params);
+      
+      if (response.success) {
+        setCollections(response.collections || []);
+        
+        if (response.statistics) {
+          setStatistics(response.statistics);
+        }
+        
+        // Transform distribution data for charts
+        if (response.distributions) {
+          // Monthly trend
+          const monthlyData = response.distributions.monthlyTrend?.map((item: any) => ({
+            month: formatMonth(item._id),
+            amount: item.amount || 0,
+            transactions: item.count || 0
+          })) || [];
+          setMonthlyTrend(monthlyData);
+          
+          // Payment method distribution
+          const methodData = response.distributions.methodDistribution?.map((item: any) => {
+            const methodName = formatPaymentMethod(item._id);
+            return {
+              name: methodName,
+              value: item.count || 0,
+              amount: item.amount || 0,
+              color: getMethodColor(item._id)
+            };
+          }) || [];
+          setPaymentMethodData(methodData);
+        }
+        
+        toast.success(`Loaded ${response.collections?.length || 0} collections`);
+      } else {
+        const errMsg = (response as any)?.message || (response as any)?.error || 'Failed to load collections';
+        toast.error(errMsg);
+        // Fallback to mock data
+        setCollections(MOCK_COLLECTIONS);
+        setMonthlyTrend(getMockMonthlyTrend());
+        setPaymentMethodData(getMockPaymentMethodData());
+      }
+    } catch (error: any) {
+      console.error('Error loading collections:', error);
+      toast.error(error.message || 'Failed to load collections');
+      // Fallback to mock data
+      setCollections(MOCK_COLLECTIONS);
+      setMonthlyTrend(getMockMonthlyTrend());
+      setPaymentMethodData(getMockPaymentMethodData());
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
-  const handleExport = () => {
-    // In a real app, this would generate a CSV or PDF
-    alert('Exporting collection report...');
+  // Load on component mount
+  useEffect(() => {
+    loadCollections();
+  }, []);
+
+  // Load when filters change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadCollections();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, selectedClass, selectedStatus, paymentMethodFilter]);
+
+  // Handle export
+  const handleExport = async () => {
+    setExportLoading(true);
+    try {
+      const params: any = {
+        search: searchTerm || undefined,
+        className: selectedClass !== 'All Classes' ? selectedClass : undefined,
+        status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
+        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter : undefined,
+      };
+
+      const blob = await collectionsService.exportCollections(params);
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `collections-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Export completed successfully');
+    } catch (error: any) {
+      console.error('Error exporting:', error);
+      toast.error(error.message || 'Failed to export');
+      
+      // Fallback: Create mock CSV
+      createMockCSVExport();
+    } finally {
+      setExportLoading(false);
+    }
   };
 
-  const handleViewDetails = (collection: any) => {
-    setSelectedCollection(collection);
-    setShowDetails(true);
+  // Handle view details
+  const handleViewDetails = async (receiptNumber: string) => {
+    try {
+      const response = await collectionsService.getCollectionDetails(receiptNumber);
+      if (response.success) {
+        setSelectedCollection(response.collection);
+        setShowDetails(true);
+      } else {
+        toast.error(response.message || 'Failed to load details');
+      }
+    } catch (error: any) {
+      console.error('Error loading collection details:', error);
+      toast.error(error.message || 'Failed to load details');
+      
+      // Fallback: Find in current collections
+      const collection = collections.find(c => c.receiptNumber === receiptNumber);
+      if (collection) {
+        setSelectedCollection(collection);
+        setShowDetails(true);
+      }
+    }
   };
 
+  // Handle status update
+  const handleStatusUpdate = async () => {
+    if (!selectedCollection) return;
+    
+    try {
+      const response = await collectionsService.updateCollectionStatus(
+        selectedCollection.receiptNumber,
+        newStatus,
+        statusUpdateNotes
+      );
+      
+      if (response.success) {
+        toast.success(`Status updated to ${newStatus}`);
+        setShowStatusDialog(false);
+        setStatusUpdateNotes('');
+        
+        // Refresh collections
+        loadCollections();
+        
+        // Update selected collection if details dialog is open
+        if (showDetails) {
+          const updatedResponse = await collectionsService.getCollectionDetails(selectedCollection.receiptNumber);
+          if (updatedResponse.success) {
+            setSelectedCollection(updatedResponse.collection);
+          }
+        }
+      } else {
+        toast.error(response.message || 'Failed to update status');
+      }
+    } catch (error: any) {
+      console.error('Error updating status:', error);
+      toast.error(error.message || 'Failed to update status');
+    }
+  };
+
+  // Handle receipt download
+  const handleDownloadReceipt = async (receiptNumber: string, format: 'html' | 'json' = 'html') => {
+    try {
+      if (format === 'html') {
+        const blob = await collectionsService.downloadReceipt(receiptNumber, 'html');
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `receipt-${receiptNumber}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        toast.success('Receipt downloaded successfully');
+      } else {
+        const data = await collectionsService.downloadReceipt(receiptNumber, 'json');
+        console.log('Receipt data:', data);
+        toast.success('Receipt data loaded');
+      }
+    } catch (error: any) {
+      console.error('Error downloading receipt:', error);
+      toast.error(error.message || 'Failed to download receipt');
+    }
+  };
+
+  // Helper functions
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
@@ -257,45 +373,150 @@ const Collections = () => {
             Failed
           </Badge>
         );
+      case 'cancelled':
+        return (
+          <Badge className="bg-gray-50 text-gray-700 border-gray-200">
+            <XCircle className="h-3 w-3 mr-1" />
+            Cancelled
+          </Badge>
+        );
+      case 'refunded':
+        return (
+          <Badge className="bg-blue-50 text-blue-700 border-blue-200">
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Refunded
+          </Badge>
+        );
       default:
-        return <Badge variant="outline">Unknown</Badge>;
+        return <Badge variant="outline">{status}</Badge>;
     }
   };
 
   const getPaymentMethodIcon = (method: string) => {
-    switch (method) {
-      case 'UPI': return <Smartphone className="h-4 w-4" />;
-      case 'Cash': return <DollarSign className="h-4 w-4" />;
-      case 'Card': return <CreditCard className="h-4 w-4" />;
-      case 'Bank Transfer': return <Building className="h-4 w-4" />;
-      case 'Cheque': return <FileText className="h-4 w-4" />;
+    switch (method.toLowerCase()) {
+      case 'upi': return <Smartphone className="h-4 w-4" />;
+      case 'cash': return <DollarSign className="h-4 w-4" />;
+      case 'card': return <CreditCard className="h-4 w-4" />;
+      case 'bank_transfer':
+      case 'bank transfer': return <Building className="h-4 w-4" />;
+      case 'cheque': return <FileText className="h-4 w-4" />;
+      case 'online': return <CreditCard className="h-4 w-4" />;
       default: return <CreditCard className="h-4 w-4" />;
     }
   };
 
   const getPaymentMethodColor = (method: string) => {
-    switch (method) {
-      case 'UPI': return 'bg-blue-100 text-blue-600';
-      case 'Cash': return 'bg-green-100 text-green-600';
-      case 'Card': return 'bg-purple-100 text-purple-600';
-      case 'Bank Transfer': return 'bg-amber-100 text-amber-600';
-      case 'Cheque': return 'bg-red-100 text-red-600';
+    switch (method.toLowerCase()) {
+      case 'upi': return 'bg-blue-100 text-blue-600';
+      case 'cash': return 'bg-green-100 text-green-600';
+      case 'card': return 'bg-purple-100 text-purple-600';
+      case 'bank_transfer':
+      case 'bank transfer': return 'bg-amber-100 text-amber-600';
+      case 'cheque': return 'bg-red-100 text-red-600';
+      case 'online': return 'bg-indigo-100 text-indigo-600';
       default: return 'bg-gray-100 text-gray-600';
     }
   };
 
+  const formatPaymentMethod = (method: string) => {
+    const methodMap: Record<string, string> = {
+      'cash': 'Cash',
+      'upi': 'UPI',
+      'card': 'Card',
+      'cheque': 'Cheque',
+      'bank_transfer': 'Bank Transfer',
+      'online': 'Online',
+      'bank transfer': 'Bank Transfer'
+    };
+    return methodMap[method.toLowerCase()] || method;
+  };
+
+  const getMethodColor = (method: string) => {
+    const colors: Record<string, string> = {
+      'cash': '#10b981',
+      'upi': '#3b82f6',
+      'card': '#8b5cf6',
+      'cheque': '#ef4444',
+      'bank_transfer': '#f59e0b',
+      'online': '#6366f1',
+      'bank transfer': '#f59e0b'
+    };
+    return colors[method.toLowerCase()] || '#6b7280';
+  };
+
+  const formatMonth = (monthString: string) => {
+    if (!monthString) return 'Unknown';
+    const [year, month] = monthString.split('-');
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${monthNames[parseInt(month) - 1] || ''} ${year}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  // Mock data fallback functions
+  const getMockMonthlyTrend = () => [
+    { month: 'Aug', amount: 185000, transactions: 42 },
+    { month: 'Sep', amount: 210000, transactions: 48 },
+    { month: 'Oct', amount: 195000, transactions: 45 },
+    { month: 'Nov', amount: 235000, transactions: 52 },
+  ];
+
+  const getMockPaymentMethodData = () => [
+    { name: 'UPI', value: 45, color: '#3b82f6', amount: 450000 },
+    { name: 'Cash', value: 25, color: '#10b981', amount: 250000 },
+    { name: 'Card', value: 15, color: '#8b5cf6', amount: 150000 },
+    { name: 'Bank Transfer', value: 10, color: '#f59e0b', amount: 100000 },
+    { name: 'Cheque', value: 5, color: '#ef4444', amount: 50000 },
+  ];
+
+  const createMockCSVExport = () => {
+    const csvContent = [
+      ['Receipt Number', 'Student Name', 'Class', 'Amount', 'Payment Method', 'Date', 'Status', 'Collected By'],
+      ...collections.map(c => [
+        c.receiptNumber,
+        c.studentName,
+        c.className,
+        c.amount,
+        formatPaymentMethod(c.paymentMethod),
+        formatDate(c.paymentDate),
+        c.status,
+        c.collectedBy
+      ])
+    ].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `collections-mock-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Filter collections
   const filteredCollections = collections.filter(collection => {
     const matchesSearch = 
       searchTerm === '' ||
       collection.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       collection.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      collection.receiptNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      collection.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       collection.parentName.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesClass = selectedClass === 'All Classes' || collection.className === selectedClass;
     const matchesStatus = selectedStatus === 'All Status' || collection.status === selectedStatus;
+    const matchesMethod = paymentMethodFilter === 'All Methods' || 
+                         collection.paymentMethod.toLowerCase() === paymentMethodFilter.toLowerCase();
     
-    return matchesSearch && matchesClass && matchesStatus;
+    return matchesSearch && matchesClass && matchesStatus && matchesMethod;
   });
 
   return (
@@ -311,11 +532,19 @@ const Collections = () => {
         </div>
         
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-2" />
+          <Button 
+            variant="outline" 
+            onClick={handleExport}
+            disabled={exportLoading || collections.length === 0}
+          >
+            {exportLoading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
             Export Report
           </Button>
-          <Button onClick={handleRefresh} disabled={loading}>
+          <Button onClick={loadCollections} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -329,8 +558,8 @@ const Collections = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-blue-700">Total Collected</p>
-                <p className="text-2xl font-bold text-blue-900">{formatCurrency(totalAmount)}</p>
-                <p className="text-xs text-blue-600 mt-1">This month</p>
+                <p className="text-2xl font-bold text-blue-900">{formatCurrency(statistics.totalAmount)}</p>
+                <p className="text-xs text-blue-600 mt-1">Across {statistics.totalCollections} payments</p>
               </div>
               <div className="p-3 bg-blue-100 rounded-full">
                 <DollarSign className="h-6 w-6 text-blue-600" />
@@ -345,14 +574,14 @@ const Collections = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-green-700">Completed</p>
-                <p className="text-2xl font-bold text-green-900">{completedCollections.length} payments</p>
-                <p className="text-xs text-green-600 mt-1">{formatCurrency(completedAmount)}</p>
+                <p className="text-2xl font-bold text-green-900">{statistics.completedCount} payments</p>
+                <p className="text-xs text-green-600 mt-1">{formatCurrency(statistics.completedAmount)}</p>
               </div>
               <div className="p-3 bg-green-100 rounded-full">
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
             </div>
-            <Progress value={successRate} className="h-2 mt-4 bg-green-200" />
+            <Progress value={statistics.successRate} className="h-2 mt-4 bg-green-200" />
           </CardContent>
         </Card>
 
@@ -361,8 +590,8 @@ const Collections = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-amber-700">Pending</p>
-                <p className="text-2xl font-bold text-amber-900">{pendingCollections.length} payments</p>
-                <p className="text-xs text-amber-600 mt-1">{formatCurrency(pendingAmount)}</p>
+                <p className="text-2xl font-bold text-amber-900">{statistics.pendingCount} payments</p>
+                <p className="text-xs text-amber-600 mt-1">{formatCurrency(statistics.pendingAmount)}</p>
               </div>
               <div className="p-3 bg-amber-100 rounded-full">
                 <Clock className="h-6 w-6 text-amber-600" />
@@ -380,7 +609,7 @@ const Collections = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-purple-700">Success Rate</p>
-                <p className="text-2xl font-bold text-purple-900">{successRate.toFixed(1)}%</p>
+                <p className="text-2xl font-bold text-purple-900">{statistics.successRate.toFixed(1)}%</p>
                 <p className="text-xs text-purple-600 mt-1">Higher than last month</p>
               </div>
               <div className="p-3 bg-purple-100 rounded-full">
@@ -388,9 +617,9 @@ const Collections = () => {
               </div>
             </div>
             <div className="flex items-center gap-2 mt-4">
-              <div className={`h-2 w-2 rounded-full ${successRate > 90 ? 'bg-green-500' : 'bg-amber-500'}`} />
+              <div className={`h-2 w-2 rounded-full ${statistics.successRate > 90 ? 'bg-green-500' : 'bg-amber-500'}`} />
               <p className="text-xs text-purple-600">
-                {successRate > 90 ? 'Excellent' : 'Needs improvement'}
+                {statistics.successRate > 90 ? 'Excellent' : 'Needs improvement'}
               </p>
             </div>
           </CardContent>
@@ -410,20 +639,26 @@ const Collections = () => {
           </CardHeader>
           <CardContent>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip 
-                    formatter={(value) => [formatCurrency(value as number), 'Amount']}
-                    labelStyle={{ color: '#666' }}
-                  />
-                  <Legend />
-                  <Bar dataKey="amount" name="Collection Amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="transactions" name="Transactions" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {monthlyTrend.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip 
+                      formatter={(value: number) => [formatCurrency(value), 'Amount']}
+                      labelStyle={{ color: '#666' }}
+                    />
+                    <Legend />
+                    <Bar dataKey="amount" name="Collection Amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="transactions" name="Transactions" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  No trend data available
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -439,26 +674,32 @@ const Collections = () => {
           </CardHeader>
           <CardContent>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsPieChart>
-                  <Pie
-                    data={paymentMethodData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {paymentMethodData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`${value}%`, 'Share']} />
-                  <Legend />
-                </RechartsPieChart>
-              </ResponsiveContainer>
+              {paymentMethodData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsPieChart>
+                    <Pie
+                      data={paymentMethodData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {paymentMethodData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value}%`, 'Share']} />
+                    <Legend />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-muted-foreground">
+                  No payment method data available
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -512,6 +753,19 @@ const Collections = () => {
                   </SelectContent>
                 </Select>
                 
+                <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Payment Method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentMethodOptions.map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {formatPaymentMethod(method)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
                 <Select value={selectedView} onValueChange={(value: 'table' | 'card') => setSelectedView(value)}>
                   <SelectTrigger className="w-32">
                     <SelectValue placeholder="View" />
@@ -527,7 +781,12 @@ const Collections = () => {
         </CardHeader>
         
         <CardContent>
-          {selectedView === 'table' ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+              <p className="mt-4 text-muted-foreground">Loading collections...</p>
+            </div>
+          ) : selectedView === 'table' ? (
             <div className="border rounded-lg overflow-hidden">
               <Table>
                 <TableHeader className="bg-muted/50">
@@ -543,11 +802,11 @@ const Collections = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredCollections.map((collection) => (
-                    <TableRow key={collection.id} className="hover:bg-muted/50">
+                    <TableRow key={collection._id} className="hover:bg-muted/50">
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className={`h-8 w-8 ${collection.avatarColor}`}>
-                            <AvatarFallback className={collection.avatarColor.split(' ')[1]}>
+                          <Avatar className="h-8 w-8 bg-blue-100 text-blue-600">
+                            <AvatarFallback className="bg-blue-100 text-blue-600">
                               {collection.studentName.split(' ').map(n => n[0]).join('')}
                             </AvatarFallback>
                           </Avatar>
@@ -566,11 +825,11 @@ const Collections = () => {
                           <div className={`p-1 rounded ${getPaymentMethodColor(collection.paymentMethod)}`}>
                             {getPaymentMethodIcon(collection.paymentMethod)}
                           </div>
-                          <span className="text-sm">{collection.paymentMethod}</span>
+                          <span className="text-sm">{formatPaymentMethod(collection.paymentMethod)}</span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{collection.date}</div>
+                        <div className="text-sm">{formatDate(collection.paymentDate)}</div>
                         <div className="text-xs text-muted-foreground">{collection.collectedBy}</div>
                       </TableCell>
                       <TableCell>{getStatusBadge(collection.status)}</TableCell>
@@ -579,7 +838,7 @@ const Collections = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleViewDetails(collection)}
+                            onClick={() => handleViewDetails(collection.receiptNumber)}
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -590,21 +849,20 @@ const Collections = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDownloadReceipt(collection.receiptNumber, 'html')}>
                                 <FileText className="h-4 w-4 mr-2" />
-                                View Receipt
+                                Download Receipt
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <Printer className="h-4 w-4 mr-2" />
-                                Print Receipt
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedCollection(collection);
+                                setShowStatusDialog(true);
+                              }}>
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Update Status
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <Mail className="h-4 w-4 mr-2" />
-                                Email Receipt
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => navigator.clipboard.writeText(collection.receiptNumber)}>
                                 <Share2 className="h-4 w-4 mr-2" />
-                                Share Details
+                                Copy Receipt No
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -618,12 +876,12 @@ const Collections = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredCollections.map((collection) => (
-                <Card key={collection.id} className="hover:shadow-md transition-shadow">
+                <Card key={collection._id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <Avatar className={`h-10 w-10 ${collection.avatarColor}`}>
-                          <AvatarFallback className={collection.avatarColor.split(' ')[1]}>
+                        <Avatar className="h-10 w-10 bg-blue-100 text-blue-600">
+                          <AvatarFallback className="bg-blue-100 text-blue-600">
                             {collection.studentName.split(' ').map(n => n[0]).join('')}
                           </AvatarFallback>
                         </Avatar>
@@ -652,12 +910,12 @@ const Collections = () => {
                           <div className={`p-1 rounded ${getPaymentMethodColor(collection.paymentMethod)}`}>
                             {getPaymentMethodIcon(collection.paymentMethod)}
                           </div>
-                          <span>{collection.paymentMethod}</span>
+                          <span>{formatPaymentMethod(collection.paymentMethod)}</span>
                         </div>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Date:</span>
-                        <span>{collection.date}</span>
+                        <span>{formatDate(collection.paymentDate)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Collected by:</span>
@@ -672,12 +930,17 @@ const Collections = () => {
                         variant="outline"
                         size="sm"
                         className="flex-1"
-                        onClick={() => handleViewDetails(collection)}
+                        onClick={() => handleViewDetails(collection.receiptNumber)}
                       >
                         <Eye className="h-3 w-3 mr-1" />
                         View Details
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => handleDownloadReceipt(collection.receiptNumber, 'html')}
+                      >
                         <FileText className="h-3 w-3 mr-1" />
                         Receipt
                       </Button>
@@ -688,7 +951,7 @@ const Collections = () => {
             </div>
           )}
           
-          {filteredCollections.length === 0 && (
+          {!loading && filteredCollections.length === 0 && (
             <div className="text-center py-12">
               <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
                 <CreditCard className="h-6 w-6 text-muted-foreground" />
@@ -700,99 +963,191 @@ const Collections = () => {
         </CardContent>
       </Card>
 
-      {/* Collection Details Modal */}
+      {/* Collection Details Dialog */}
       {showDetails && selectedCollection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Collection Details</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setShowDetails(false)}>
-                  ✕
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <Avatar className={`h-16 w-16 ${selectedCollection.avatarColor}`}>
-                    <AvatarFallback className={selectedCollection.avatarColor.split(' ')[1]}>
-                      {selectedCollection.studentName.split(' ').map((n: string) => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="text-xl font-bold">{selectedCollection.studentName}</h3>
-                    <p className="text-muted-foreground">Student ID: {selectedCollection.studentId}</p>
-                  </div>
+        <Dialog open={showDetails} onOpenChange={setShowDetails}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Collection Details</DialogTitle>
+              <DialogDescription>
+                Complete information for receipt {selectedCollection.receiptNumber}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <Avatar className="h-16 w-16 bg-blue-100 text-blue-600">
+                  <AvatarFallback className="bg-blue-100 text-blue-600">
+                    {selectedCollection.studentName.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold">{selectedCollection.studentName}</h3>
+                  <p className="text-muted-foreground">Student ID: {selectedCollection.studentId}</p>
                 </div>
-                
+                {getStatusBadge(selectedCollection.status)}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Class</p>
+                  <p className="font-medium">{selectedCollection.className}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Section</p>
+                  <p className="font-medium">{selectedCollection.section}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Roll No</p>
+                  <p className="font-medium">{selectedCollection.rollNo}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Parent</p>
+                  <p className="font-medium">{selectedCollection.parentName}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Contact</p>
+                  <p className="font-medium">{selectedCollection.parentPhone}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="font-medium">{selectedCollection.parentEmail}</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h4 className="font-medium mb-3">Payment Information</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-muted-foreground">Class</p>
-                    <p className="font-medium">{selectedCollection.className}</p>
+                    <p className="text-sm text-muted-foreground">Receipt Number</p>
+                    <p className="font-medium">{selectedCollection.receiptNumber}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Roll No</p>
-                    <p className="font-medium">{selectedCollection.rollNo}</p>
+                    <p className="text-sm text-muted-foreground">Amount</p>
+                    <p className="text-xl font-bold text-green-600">{formatCurrency(selectedCollection.amount)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Parent</p>
-                    <p className="font-medium">{selectedCollection.parentName}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Contact</p>
-                    <p className="font-medium">{selectedCollection.parentPhone}</p>
-                  </div>
-                </div>
-                
-                <Separator />
-                
-                <div>
-                  <h4 className="font-medium mb-3">Payment Information</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Receipt Number</p>
-                      <p className="font-medium">{selectedCollection.receiptNo}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Amount</p>
-                      <p className="text-xl font-bold text-green-600">{formatCurrency(selectedCollection.amount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Payment Method</p>
-                      <div className="flex items-center gap-2">
-                        <div className={`p-1 rounded ${getPaymentMethodColor(selectedCollection.paymentMethod)}`}>
-                          {getPaymentMethodIcon(selectedCollection.paymentMethod)}
-                        </div>
-                        <span>{selectedCollection.paymentMethod}</span>
+                    <p className="text-sm text-muted-foreground">Payment Method</p>
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1 rounded ${getPaymentMethodColor(selectedCollection.paymentMethod)}`}>
+                        {getPaymentMethodIcon(selectedCollection.paymentMethod)}
                       </div>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Status</p>
-                      {getStatusBadge(selectedCollection.status)}
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Date</p>
-                      <p className="font-medium">{selectedCollection.date}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Collected By</p>
-                      <p className="font-medium">{selectedCollection.collectedBy}</p>
+                      <span>{formatPaymentMethod(selectedCollection.paymentMethod)}</span>
                     </div>
                   </div>
-                </div>
-                
-                <Separator />
-                
-                <div>
-                  <h4 className="font-medium mb-3">Notes</h4>
-                  <p className="text-sm text-muted-foreground">{selectedCollection.notes}</p>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Status</p>
+                    {getStatusBadge(selectedCollection.status)}
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Date</p>
+                    <p className="font-medium">{formatDate(selectedCollection.paymentDate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Collected By</p>
+                    <p className="font-medium">{selectedCollection.collectedBy}</p>
+                  </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+
+              <Separator />
+
+              <div>
+                <h4 className="font-medium mb-3">Notes</h4>
+                <p className="text-sm text-muted-foreground">{selectedCollection.notes || selectedCollection.description || 'No notes available'}</p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button 
+                  className="flex-1"
+                  onClick={() => handleDownloadReceipt(selectedCollection.receiptNumber, 'html')}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Download Receipt
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => {
+                    setShowStatusDialog(true);
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Update Status
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => navigator.clipboard.writeText(selectedCollection.receiptNumber)}
+                >
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Copy Receipt No
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
+
+      {/* Status Update Dialog */}
+      <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Collection Status</DialogTitle>
+            <DialogDescription>
+              Update status for receipt {selectedCollection?.receiptNumber}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="status">Status</Label>
+              <Select value={newStatus} onValueChange={setNewStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusUpdateOptions.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Textarea
+                id="notes"
+                placeholder="Add notes about this status change..."
+                value={statusUpdateNotes}
+                onChange={(e) => setStatusUpdateNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+            
+            {newStatus === 'refunded' && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                <p className="text-sm text-amber-800">
+                  <strong>Note:</strong> Marking as refunded will also mark related pending installments as pending.
+                </p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStatusDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleStatusUpdate}>
+              Update Status
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
