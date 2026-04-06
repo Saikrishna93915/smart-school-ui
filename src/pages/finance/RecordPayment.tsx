@@ -902,7 +902,19 @@ export default function RecordPayment() {
   }, [selectedStudent, formData, feeSummary, paymentMethods]);
   
   // Handle Payment Submission
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async () => {
+    // CRITICAL: Prevent duplicate submissions
+    if (isSubmitting) {
+      toast({
+        title: 'Please Wait',
+        description: 'Payment is being processed. Please do not double-click.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!selectedStudent) {
       toast({
         title: 'Validation Error',
@@ -942,6 +954,7 @@ export default function RecordPayment() {
       return;
     }
 
+    setIsSubmitting(true);
     setLoading(true);
     
     try {
@@ -1056,6 +1069,7 @@ export default function RecordPayment() {
       });
     } finally {
       setLoading(false);
+      setIsSubmitting(false); // CRITICAL: Reset submission state to allow new payments
     }
   };
 
