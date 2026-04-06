@@ -35,6 +35,7 @@ import {
   Wallet,
   Building,
   Smartphone,
+  Globe,
   CheckCircle,
   AlertCircle,
   Calendar,
@@ -148,7 +149,7 @@ interface PaymentFormData {
   studentId: string;
   admissionNumber: string;
   paymentDate: string;
-  paymentMethod: 'cash' | 'cheque' | 'bank_transfer' | 'upi' | 'card' | 'online';
+  paymentMethod: 'cash' | 'cheque' | 'bank-transfer' | 'upi' | 'card' | 'online';
   amount: number;
   discount: number;
   discountReason: string;
@@ -163,11 +164,132 @@ interface PaymentFormData {
   chequeDate: string;
   utrNo: string;
   upiId: string;
+  ifscCode: string;
+  accountNumber: string;
+  cardLast4: string;
   feesPaid: FeeBreakdown[];
   sendReceipt: boolean;
   sendSMS: boolean;
   sendEmail: boolean;
   printReceipt: boolean;
+}
+
+// ==================== PAYMENT VALIDATION ====================
+
+/**
+ * Validate payment method-specific required fields
+ */
+function validatePaymentMethodDetails(formData: PaymentFormData): string | null {
+  const { paymentMethod, upiId, transactionId, utrNo, bankName, chequeNo, chequeDate, ifscCode, cardLast4, referenceNo } = formData;
+  const errors: string[] = [];
+
+  switch (paymentMethod) {
+    case 'upi':
+      if (!upiId || upiId.trim() === '') {
+        errors.push('UPI ID is required');
+      } else if (!/^[\w.-]+@[\w]+$/.test(upiId)) {
+        errors.push('Invalid UPI ID format. Example: username@paytm');
+      }
+
+      if (!transactionId || transactionId.trim() === '') {
+        errors.push('Transaction ID is required');
+      } else if (!/^[A-Za-z0-9]{12,20}$/.test(transactionId.trim())) {
+        errors.push('Transaction ID must be 12-20 alphanumeric characters');
+      }
+      break;
+
+    case 'bank-transfer':
+      if (!utrNo || utrNo.trim() === '') {
+        errors.push('UTR number is required');
+      } else if (!/^\d{12}$/.test(utrNo.trim())) {
+        errors.push('UTR number must be exactly 12 digits');
+      }
+
+      if (!bankName || bankName.trim() === '') {
+        errors.push('Bank name is required');
+      }
+
+      if (!transactionId || transactionId.trim() === '') {
+        errors.push('Transaction ID is required');
+      }
+
+      if (!ifscCode || ifscCode.trim() === '') {
+        errors.push('IFSC code is required');
+      } else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(ifscCode.trim().toUpperCase())) {
+        errors.push('Invalid IFSC code format. Example: SBIN0001234');
+      }
+
+      if (formData.accountNumber && formData.accountNumber.trim() !== '') {
+        if (!/^\d{9,18}$/.test(formData.accountNumber.trim())) {
+          errors.push('Account number must be 9-18 digits');
+        }
+      }
+      break;
+
+    case 'cheque':
+      if (!chequeNo || chequeNo.trim() === '') {
+        errors.push('Cheque number is required');
+      } else if (!/^\d{6,9}$/.test(chequeNo.trim())) {
+        errors.push('Cheque number must be 6-9 digits');
+      }
+
+      if (!bankName || bankName.trim() === '') {
+        errors.push('Bank name is required');
+      }
+
+      if (!chequeDate) {
+        errors.push('Cheque date is required');
+      } else {
+        const cDate = new Date(chequeDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (cDate > today) {
+          errors.push('Cheque date cannot be in the future');
+        }
+      }
+
+      if (ifscCode && ifscCode.trim() !== '') {
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(ifscCode.trim().toUpperCase())) {
+          errors.push('Invalid IFSC code format');
+        }
+      }
+      break;
+
+    case 'card':
+      if (!transactionId || transactionId.trim() === '') {
+        errors.push('Transaction ID is required');
+      }
+
+      if (!cardLast4 || cardLast4.trim() === '') {
+        errors.push('Last 4 digits of card are required');
+      } else if (!/^\d{4}$/.test(cardLast4.trim())) {
+        errors.push('Card last 4 digits must be exactly 4 digits');
+      }
+
+      if (!referenceNo || referenceNo.trim() === '') {
+        errors.push('Reference number is required');
+      }
+      break;
+
+    case 'online':
+      if (!transactionId || transactionId.trim() === '') {
+        errors.push('Transaction ID is required');
+      }
+
+      if (!referenceNo || referenceNo.trim() === '') {
+        errors.push('Reference number is required');
+      }
+      break;
+
+    case 'cash':
+      // Cash only requires amount, no additional validation
+      break;
+
+    default:
+      errors.push(`Invalid payment method: ${paymentMethod}`);
+  }
+
+  return errors.length > 0 ? errors.join('. ') : null;
 }
 
 interface PaymentResponse {
@@ -545,6 +667,9 @@ export default function RecordPayment() {
     chequeDate: '',
     utrNo: '',
     upiId: '',
+    ifscCode: '',
+    accountNumber: '',
+    cardLast4: '',
     feesPaid: [],
     sendReceipt: true,
     sendSMS: true,
@@ -557,12 +682,12 @@ export default function RecordPayment() {
   
   // Payment Methods Configuration
   const paymentMethods = [
-    { value: 'cash', label: 'Cash', icon: Wallet, requiresRef: false, fields: ['referenceNo'] },
-    { value: 'cheque', label: 'Cheque', icon: FileSignature, requiresRef: true, fields: ['bankName', 'chequeNo', 'chequeDate'] },
-    { value: 'bank_transfer', label: 'Bank Transfer', icon: Building, requiresRef: true, fields: ['transactionId', 'utrNo'] },
+    { value: 'cash', label: 'Cash', icon: Wallet, requiresRef: false, fields: [] },
+    { value: 'cheque', label: 'Cheque', icon: FileSignature, requiresRef: true, fields: ['bankName', 'chequeNo', 'chequeDate', 'ifscCode'] },
+    { value: 'bank-transfer', label: 'Bank Transfer', icon: Building, requiresRef: true, fields: ['utrNo', 'bankName', 'ifscCode', 'transactionId', 'accountNumber'] },
     { value: 'upi', label: 'UPI', icon: Smartphone, requiresRef: true, fields: ['upiId', 'transactionId'] },
-    { value: 'card', label: 'Credit/Debit Card', icon: CreditCard, requiresRef: true, fields: ['transactionId', 'referenceNo'] },
-    { value: 'online', label: 'Online Payment', icon: Smartphone, requiresRef: true, fields: ['transactionId'] },
+    { value: 'card', label: 'Credit/Debit Card', icon: CreditCard, requiresRef: true, fields: ['transactionId', 'cardLast4', 'referenceNo'] },
+    { value: 'online', label: 'Online Payment', icon: Globe, requiresRef: true, fields: ['transactionId', 'referenceNo'] },
   ];
   
   // Computed Values
@@ -802,6 +927,17 @@ export default function RecordPayment() {
       return;
     }
 
+    // Validate payment method-specific required fields
+    const validationError = validatePaymentMethodDetails(formData);
+    if (validationError) {
+      toast({
+        title: 'Validation Error',
+        description: validationError,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
     
     try {
@@ -832,7 +968,10 @@ export default function RecordPayment() {
         chequeDate: formData.chequeDate,
         utrNo: formData.utrNo,
         upiId: formData.upiId,
-        
+        ifscCode: formData.ifscCode,
+        accountNumber: formData.accountNumber,
+        cardLast4: formData.cardLast4,
+
         feesPaid: formData.feesPaid,
         
         sendReceipt: formData.sendReceipt,
