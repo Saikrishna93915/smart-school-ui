@@ -183,16 +183,31 @@ const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
-const formatDate = (dateString: string): string => {
-  return format(parseISO(dateString), "dd MMM yyyy");
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'N/A';
+  try {
+    return format(parseISO(dateString), "dd MMM yyyy");
+  } catch {
+    return 'Invalid Date';
+  }
 };
 
-const formatDateTime = (dateString: string): string => {
-  return format(parseISO(dateString), "dd MMM yyyy, hh:mm a");
+const formatDateTime = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'N/A';
+  try {
+    return format(parseISO(dateString), "dd MMM yyyy, hh:mm a");
+  } catch {
+    return 'N/A';
+  }
 };
 
-const formatTime = (dateString: string): string => {
-  return format(parseISO(dateString), "hh:mm a");
+const formatTime = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'N/A';
+  try {
+    return format(parseISO(dateString), "hh:mm a");
+  } catch {
+    return 'N/A';
+  }
 };
 
 const getInitials = (firstName: string, lastName: string): string => {
