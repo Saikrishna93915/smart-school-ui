@@ -53,7 +53,8 @@ export default function StudentDashboard() {
           throw new Error('No authentication token found');
         }
 
-        const response = await axios.get('http://localhost:8080/api/student/me', {
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+        const response = await axios.get(`${apiBaseUrl}/student/me`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

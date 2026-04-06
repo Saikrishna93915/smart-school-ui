@@ -1,8 +1,11 @@
 // src/services/collectionsService.ts
-const API_BASE_URL = 'http://localhost:8080/api';
+import { getStoredToken } from '@/lib/auth/storage';
+
+// Use the same API URL as the rest of the app
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = getStoredToken() || localStorage.getItem('token');
   return {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
