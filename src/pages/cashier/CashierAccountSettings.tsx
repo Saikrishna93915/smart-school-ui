@@ -612,7 +612,7 @@ export default function CashierAccountSettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="cash-in-hand">Actual Cash in Hand</Label>
+                  <Label htmlFor="cash-in-hand">Actual Cash in Hand *</Label>
                   <div className="relative">
                     <IndianRupee className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -629,6 +629,39 @@ export default function CashierAccountSettings() {
                   <p className="text-xs text-muted-foreground">
                     Count the physical cash you have at the end of the shift
                   </p>
+
+                  {/* VARIANCE PREVIEW */}
+                  {cashInHand && currentShift && (
+                    <div className={`mt-3 p-3 rounded-lg border-2 ${
+                      Math.abs((currentShift.transactions?.cash || 0) - parseFloat(cashInHand || '0')) > 500
+                        ? 'border-red-300 bg-red-50'
+                        : Math.abs((currentShift.transactions?.cash || 0) - parseFloat(cashInHand || '0')) > 0
+                        ? 'border-amber-300 bg-amber-50'
+                        : 'border-green-300 bg-green-50'
+                    }`}>
+                      <p className="text-sm font-semibold">Variance Preview</p>
+                      <p className="text-xs mt-1">
+                        Expected Cash: <strong>₹{(currentShift.transactions?.cash || 0).toLocaleString()}</strong>
+                      </p>
+                      <p className="text-xs">
+                        Your Entry: <strong>₹{parseFloat(cashInHand || '0').toLocaleString()}</strong>
+                      </p>
+                      <p className={`text-sm font-bold mt-1 ${
+                        Math.abs((currentShift.transactions?.cash || 0) - parseFloat(cashInHand || '0')) > 500
+                          ? 'text-red-700'
+                          : Math.abs((currentShift.transactions?.cash || 0) - parseFloat(cashInHand || '0')) > 0
+                          ? 'text-amber-700'
+                          : 'text-green-700'
+                      }`}>
+                        {(() => {
+                          const variance = (currentShift.transactions?.cash || 0) - parseFloat(cashInHand || '0');
+                          if (variance > 0) return `⚠️ Shortage: ₹${variance.toLocaleString()}`;
+                          if (variance < 0) return `⚠️ Excess: ₹${Math.abs(variance).toLocaleString()}`;
+                          return '✅ Perfect Match!';
+                        })()}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
