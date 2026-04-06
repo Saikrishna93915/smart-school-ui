@@ -195,16 +195,24 @@ const formatCurrency = (amount: number): string => {
 
 const formatTime = (dateString: string | Date | null | undefined): string => {
   if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return "-";
-  return format(date, "hh:mm a");
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "-";
+    return format(date, "hh:mm a");
+  } catch {
+    return "-";
+  }
 };
 
 const formatDate = (dateString: string | Date | null | undefined): string => {
   if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return "-";
-  return format(date, "dd MMM yyyy");
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "-";
+    return format(date, "dd MMM yyyy");
+  } catch {
+    return "-";
+  }
 };
 
 const getPaymentMethodIcon = (method: string) => {
@@ -1248,13 +1256,13 @@ export default function CashierDashboard() {
           <DialogHeader>
             <DialogTitle>Receipt Details</DialogTitle>
           </DialogHeader>
-          {selectedTransaction && (
+          {selectedTransaction ? (
             <div className="space-y-4 py-4">
               <div className="border rounded-lg p-4 bg-gray-50">
                 <div className="flex justify-between items-center mb-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Receipt Number</p>
-                    <p className="font-mono font-bold">{selectedTransaction.receiptNumber}</p>
+                    <p className="font-mono font-bold">{selectedTransaction.receiptNumber || 'N/A'}</p>
                   </div>
                   <Badge className="bg-green-600 text-white">Paid</Badge>
                 </div>
@@ -1265,72 +1273,59 @@ export default function CashierDashboard() {
                   <div>
                     <p className="text-xs text-muted-foreground">Student Name</p>
                     <p className="font-medium">
-                      {selectedTransaction.studentId?.personal?.firstName} {" "}
-                      {selectedTransaction.studentId?.personal?.lastName}
+                      {selectedTransaction.studentId?.personal?.firstName || ''} {' '}
+                      {selectedTransaction.studentId?.personal?.lastName || ''}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Class</p>
                     <p className="font-medium">
-                      {selectedTransaction.studentId?.class}-{selectedTransaction.studentId?.section}
+                      {selectedTransaction.studentId?.academic?.class || selectedTransaction.studentId?.class || ''}-
+                      {selectedTransaction.studentId?.academic?.section || selectedTransaction.studentId?.section || ''}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Amount</p>
                     <p className="font-bold text-green-600 text-lg">
-                      {formatCurrency(selectedTransaction.amount)}
+                      {formatCurrency(selectedTransaction.amount || 0)}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Payment Method</p>
-                    <p className="font-medium capitalize">{selectedTransaction.paymentMethod}</p>
+                    <p className="font-medium capitalize">{selectedTransaction.paymentMethod || '-'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Date & Time</p>
                     <p className="font-medium">
-                      {formatDate(selectedTransaction.paymentDate || selectedTransaction.createdAt)} at{" "}
+                      {formatDate(selectedTransaction.paymentDate || selectedTransaction.createdAt)} at{' '}
                       {formatTime(selectedTransaction.paymentDate || selectedTransaction.createdAt)}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Received By</p>
-                    <p className="font-medium">{selectedTransaction.receivedBy?.name}</p>
+                    <p className="font-medium">{selectedTransaction.receivedBy?.name || '-'}</p>
                   </div>
                 </div>
-
-                {selectedTransaction.paymentMethod === "cheque" && (
-                  <div className="mt-3 p-3 bg-purple-50 rounded">
-                    <p className="text-xs font-medium text-purple-800">Cheque Details</p>
-                    <p className="text-sm">
-                      Cheque No: {selectedTransaction.chequeNumber} | Bank:{" "}
-                      {selectedTransaction.bankName} | Date:{" "}
-                      {selectedTransaction.chequeDate && formatDate(selectedTransaction.chequeDate)}
-                    </p>
-                  </div>
-                )}
-
-                {selectedTransaction.paymentMethod === "upi" && (
-                  <div className="mt-3 p-3 bg-indigo-50 rounded">
-                    <p className="text-xs font-medium text-indigo-800">UPI Details</p>
-                    <p className="text-sm">UPI ID: {selectedTransaction.upiId}</p>
-                  </div>
-                )}
               </div>
             </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">No transaction selected</p>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowReceiptDialog(false)}>
               Close
             </Button>
-            <Button
-              onClick={() => {
-                setShowReceiptDialog(false);
-                handlePrintReceipt(selectedTransaction!);
-              }}
-            >
-              <Printer className="h-4 w-4 mr-2" />
-              Print
-            </Button>
+            {selectedTransaction && (
+              <Button
+                onClick={() => {
+                  setShowReceiptDialog(false);
+                  handlePrintReceipt(selectedTransaction);
+                }}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Print
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
