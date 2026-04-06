@@ -1010,7 +1010,12 @@ export default function RecordPayment() {
       if (formData.printReceipt) {
         setTimeout(() => handlePrintReceipt(receipt), 1000);
       }
-      
+
+      // Redirect to cashier dashboard after 2 seconds to show updated stats
+      setTimeout(() => {
+        navigate('/cashier/dashboard');
+      }, 2000);
+
       setTimeout(() => {
         setSelectedStudent(null);
         setFeeSummary(null);

@@ -370,6 +370,15 @@ export default function CashierDashboard() {
     loadDashboardData();
   }, [loadDashboardData]);
 
+  // Auto-refresh dashboard every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadDashboardData(false); // silent refresh
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [loadDashboardData]);
+
   // ==================== FILTERED TRANSACTIONS ====================
 
   const filteredTransactions = useMemo(() => {
