@@ -918,10 +918,10 @@ export default function RecordPayment() {
     }
 
     // Validate amount doesn't exceed remaining due (prevent overpayment)
-    if (feeSummary && formData.amount > totalDues + totalPaid) {
+    if (feeSummary && formData.amount > totalDues + 1) {
       toast({
-        title: 'Validation Error',
-        description: `Amount cannot exceed total fee (${formatCurrency(totalDues + totalPaid)})`,
+        title: 'Overpayment Warning',
+        description: `Payment amount (${formatCurrency(formData.amount)}) exceeds remaining due (${formatCurrency(totalDues)}). Total fee: ${formatCurrency(totalDues + totalPaid)}`,
         variant: 'destructive',
       });
       return;
@@ -1685,7 +1685,7 @@ export default function RecordPayment() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleFieldChange('amount', totalDues + totalPaid)}
+                onClick={() => handleFieldChange('amount', totalDues)}
                 className="border-blue-300 hover:bg-blue-50"
               >
                 Pay Full Fee
