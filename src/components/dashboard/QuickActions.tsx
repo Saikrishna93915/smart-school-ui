@@ -1,6 +1,7 @@
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { UserPlus, UserCheck, CreditCard, MessageSquare, FileText, Calendar } from 'lucide-react';
+import { UserPlus, UserCheck, CreditCard, MessageSquare, FileText, Calendar, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserRole } from '@/types/auth';
 
@@ -13,12 +14,13 @@ interface QuickAction {
 }
 
 const quickActions: QuickAction[] = [
-  { title: 'Add Student', icon: UserPlus, href: '/students/add', variant: 'default', roles: ['admin'] },
+  { title: 'Add Student', icon: UserPlus, href: '/students', variant: 'default', roles: ['admin'] },
   { title: 'Mark Attendance', icon: UserCheck, href: '/attendance', variant: 'success', roles: ['admin', 'teacher'] },
-  { title: 'Collect Fee', icon: CreditCard, href: '/fees', variant: 'warning', roles: ['admin'] },
+  { title: 'Collect Fee', icon: CreditCard, href: '/finance/collections', variant: 'warning', roles: ['admin'] },
   { title: 'Send Notice', icon: MessageSquare, href: '/communication', variant: 'secondary', roles: ['admin', 'teacher'] },
-  { title: 'View Reports', icon: FileText, href: '/reports', variant: 'default', roles: ['admin', 'owner'] },
-  { title: 'Schedule Event', icon: Calendar, href: '/calendar', variant: 'secondary', roles: ['admin'] },
+  { title: 'View Reports', icon: FileText, href: '/finance/reports', variant: 'default', roles: ['admin', 'owner'] },
+  { title: 'Manage Timetable', icon: Clock, href: '/timetable', variant: 'default', roles: ['admin', 'owner'] },
+  { title: 'My Timetable', icon: Clock, href: '/timetable', variant: 'secondary', roles: ['teacher', 'student'] },
 ];
 
 interface QuickActionsProps {
@@ -27,7 +29,12 @@ interface QuickActionsProps {
 }
 
 export function QuickActions({ role, className }: QuickActionsProps) {
+  const navigate = useNavigate();
   const filteredActions = quickActions.filter((action) => action.roles.includes(role));
+
+  const handleAction = (href: string) => {
+    navigate(href);
+  };
 
   return (
     <Card className={cn('animate-fade-in', className)}>
@@ -42,10 +49,11 @@ export function QuickActions({ role, className }: QuickActionsProps) {
               <Button
                 key={action.title}
                 variant={action.variant}
-                className="h-auto flex-col gap-2 py-4"
+                className="h-auto flex-col gap-2 py-4 transition-all hover:scale-105 cursor-pointer"
+                onClick={() => handleAction(action.href)}
               >
                 <Icon className="h-5 w-5" />
-                <span className="text-xs">{action.title}</span>
+                <span className="text-xs text-center">{action.title}</span>
               </Button>
             );
           })}

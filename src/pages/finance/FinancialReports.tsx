@@ -326,93 +326,123 @@ const FinancialReportsPage = () => {
     loadReportData();
   }, []);
 
-  // Handle generate report
-  const handleGenerateReport = async () => {
-    try {
-      setGenerating(true);
-      
-      // Build report configuration
-      const reportConfig: ReportConfig = {
-        reportType,
-        format,
-        startDate: dateRange.start,
-        endDate: dateRange.end,
-        className: selectedClass !== 'All Classes' ? selectedClass : undefined,
-        section: selectedSection !== 'All Sections' ? selectedSection : undefined,
-        paymentMethod: selectedPaymentMethod !== 'All Methods' ? selectedPaymentMethod : undefined,
-        status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
-        includeCharts,
-        includeDetails,
-        includeSummary,
-        includeRecommendations,
-        emailRecipients: emailRecipients ? emailRecipients.split(',').map(e => e.trim()) : undefined,
-        schedule: scheduleReport ? {
+  const getToken = () => {
+    return localStorage.getItem('token');
+  };
+
+  const buildReportConfig = (
+    overrides?: Partial<ReportConfig>
+  ): ReportConfig => ({
+    reportType,
+    format,
+    startDate: dateRange.start,
+    endDate: dateRange.end,
+    className: selectedClass !== 'All Classes' ? selectedClass : undefined,
+    section: selectedSection !== 'All Sections' ? selectedSection : undefined,
+    paymentMethod: selectedPaymentMethod !== 'All Methods' ? selectedPaymentMethod : undefined,
+    status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
+    includeCharts,
+    includeDetails,
+    includeSummary,
+    includeRecommendations,
+    emailRecipients: emailRecipients ? emailRecipients.split(',').map(e => e.trim()).filter(Boolean) : undefined,
+    schedule: scheduleReport
+      ? {
           enabled: true,
           frequency: scheduleFrequency as any,
           time: '09:00'
-        } : undefined
-      };
+        }
+      : undefined,
+    ...overrides,
+  });
 
-      console.log('Generating report with config:', reportConfig);
-      
-      // Call the API to generate report
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast.error('Please login first');
-        return;
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/reports/generate`, {
-        method: 'POST',
+  const getFilenameFromResponse = (response: Response, fallback: string) => {
+    const contentDisposition = response.headers.get('Content-Disposition');
+    if (!contentDisposition) return fallback;
+    const match = contentDisposition.match(/filename="?(.+?)"?$/);
+    return match?.[1] || fallback;
+  };
+
+  const refreshRecentReports = async (token: string) => {
+    try {
+      const recentRes = await fetch(`${API_BASE_URL}/reports/recent`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(reportConfig)
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      if (!recentRes.ok) return;
+      const recentData = await recentRes.json();
+      if (recentData.success && Array.isArray(recentData.data)) {
+        setRecentReports(recentData.data);
       }
+    } catch (error) {
+      console.error('Failed to refresh recent reports:', error);
+    }
+  };
 
-      // Get filename from headers
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = `${reportType}-report-${new Date().toISOString().split('T')[0]}.${format}`;
-      
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="?(.+?)"?$/);
-        if (match) filename = match[1];
+  const requestReport = async ({
+    config,
+    openPreview = false,
+    autoPrint = false,
+    successMessage,
+  }: {
+    config: ReportConfig;
+    openPreview?: boolean;
+    autoPrint?: boolean;
+    successMessage?: string;
+  }) => {
+    const token = getToken();
+    if (!token) {
+      toast.error('Please login first');
+      return;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/reports/generate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Report generation failed (${response.status}): ${errorText}`);
+    }
+
+    const fallbackName = `${config.reportType}-report-${new Date().toISOString().split('T')[0]}.${config.format === 'excel' ? 'xlsx' : config.format}`;
+    const filename = getFilenameFromResponse(response, fallbackName);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    if (openPreview && config.format === 'pdf') {
+      const preview = window.open(blobUrl, '_blank');
+      if (preview && autoPrint) {
+        preview.onload = () => preview.print();
       }
-
-      // Get the blob and create download link
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 15000);
+    } else {
       const a = document.createElement('a');
-      a.href = url;
+      a.href = blobUrl;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(blobUrl);
+    }
 
-      toast.success(`Report "${filename}" generated successfully!`);
-      
-      // Refresh recent reports
-      const recentRes = await fetch(`${API_BASE_URL}/reports/recent`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (recentRes.ok) {
-        const recentData = await recentRes.json();
-        if (recentData.success && recentData.data && Array.isArray(recentData.data)) {
-          setRecentReports(recentData.data);
-        }
-      }
+    toast.success(successMessage || `Report "${filename}" generated successfully`);
+    await refreshRecentReports(token);
+  };
 
+  // Handle generate report
+  const handleGenerateReport = async () => {
+    try {
+      setGenerating(true);
+      await requestReport({ config: buildReportConfig() });
     } catch (error) {
       console.error('Generate report error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to generate report');
@@ -420,70 +450,110 @@ const FinancialReportsPage = () => {
       setGenerating(false);
     }
   };
-  
+
   // Handle print preview
-  const handlePrintPreview = () => {
-    toast.info('Print preview feature coming soon');
-  };
-  
-  // Handle email report
-  const handleEmailReport = () => {
-    if (emailRecipients) {
-      toast.info(`Report email feature coming soon. Would email to: ${emailRecipients}`);
-    } else {
-      toast.warning('Please enter email addresses in the "Schedule & Share" section');
+  const handlePrintPreview = async () => {
+    try {
+      setGenerating(true);
+      await requestReport({
+        config: buildReportConfig({ format: 'pdf' }),
+        openPreview: true,
+        autoPrint: false,
+        successMessage: 'Print preview opened'
+      });
+    } catch (error) {
+      console.error('Print preview error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to open print preview');
+    } finally {
+      setGenerating(false);
     }
   };
-  
+
+  // Handle email report
+  const handleEmailReport = async () => {
+    if (!emailRecipients.trim()) {
+      toast.warning('Please enter email addresses in the "Schedule & Share" section');
+      return;
+    }
+
+    try {
+      setGenerating(true);
+      await requestReport({
+        config: buildReportConfig({ format: 'pdf' }),
+        successMessage: `Report generated. Share it with: ${emailRecipients}`
+      });
+    } catch (error) {
+      console.error('Email report error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to generate report for email');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   // Handle quick generate
   const handleQuickGenerate = async (type: string) => {
     try {
-      setReportType(type);
-      
-      // Set date range for quick reports
+      setGenerating(true);
+
       const today = new Date();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      
-      setDateRange({
+      const quickRange = {
         start: startOfMonth.toISOString().split('T')[0],
         end: today.toISOString().split('T')[0]
+      };
+
+      const quickFormat = type === 'defaulter' ? 'excel' : 'pdf';
+
+      setReportType(type);
+      setFormat(quickFormat);
+      setDateRange(quickRange);
+
+      await requestReport({
+        config: buildReportConfig({
+          reportType: type,
+          format: quickFormat,
+          startDate: quickRange.start,
+          endDate: quickRange.end
+        }),
+        successMessage: `${reportTypes.find(r => r.id === type)?.name || 'Quick report'} generated`
       });
-
-      // Set appropriate format based on report type
-      if (type === 'defaulter') {
-        setFormat('excel');
-      } else if (type === 'collection') {
-        setFormat('pdf');
-      }
-
-      toast.info(`Quick report configured for ${reportTypes.find(r => r.id === type)?.name}`);
-      
     } catch (error) {
       console.error('Quick generate error:', error);
-      toast.error('Failed to configure quick report');
+      toast.error(error instanceof Error ? error.message : 'Failed to generate quick report');
+    } finally {
+      setGenerating(false);
     }
   };
 
   // Handle download recent report
   const handleDownloadReport = async (report: RecentReport) => {
     try {
-      // For mock reports, show a message
-      if (report.url.startsWith('/reports/')) {
-        toast.info('Downloading report...');
-        // Simulate download
-        setTimeout(() => {
-          toast.success(`Downloaded ${report.name}`);
-        }, 1000);
-      } else {
-        // For real reports
-        toast.info(`Downloading ${report.name}...`);
-        setTimeout(() => {
-          toast.success(`Downloaded ${report.name}`);
-        }, 1000);
-      }
+      setGenerating(true);
+      const normalizedType = report.type?.toLowerCase();
+      const mappedFormat = normalizedType === 'xlsx' ? 'excel' : normalizedType;
+      const mappedReportType =
+        report.name.toLowerCase().includes('defaulter')
+          ? 'defaulter'
+          : report.name.toLowerCase().includes('payment method')
+          ? 'payment-methods'
+          : report.name.toLowerCase().includes('monthly')
+          ? 'monthly-trend'
+          : report.name.toLowerCase().includes('annual')
+          ? 'annual'
+          : 'collection';
+
+      await requestReport({
+        config: buildReportConfig({
+          reportType: mappedReportType,
+          format: (mappedFormat === 'pdf' || mappedFormat === 'excel' || mappedFormat === 'csv') ? mappedFormat : format
+        }),
+        successMessage: `${report.name} generated and downloaded`
+      });
     } catch (error) {
       console.error('Download report error:', error);
-      toast.error('Failed to download report');
+      toast.error(error instanceof Error ? error.message : 'Failed to download report');
+    } finally {
+      setGenerating(false);
     }
   };
 

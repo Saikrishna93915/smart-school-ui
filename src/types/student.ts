@@ -63,6 +63,7 @@ export interface Student {
     attendance: number; 
     status: 'active' | 'inactive' | 'at-risk';
     feeStatus: 'paid' | 'pending' | 'overdue';
+    feeBalance?: number; // Remaining fee balance (totalDue)
     transport: 'yes' | 'no' | 'N/A'; // N/A used in original table rendering, though 'yes'/'no' expected from backend
 }
 
@@ -79,4 +80,5 @@ export interface StudentCreatePayload {
     attendance?: number; 
     feeStatus?: 'paid' | 'pending' | 'overdue';
     transport?: 'yes' | 'no' | 'N/A';
+    // Note: Password is handled by backend and validated on frontend only
 }

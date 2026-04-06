@@ -1,8 +1,7 @@
 // app/(dashboard)/settings/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +16,6 @@ import { Progress } from '@/components/ui/progress';
 import {
   School,
   Calendar,
-  BookOpen,
   CreditCard,
   Bell,
   Shield,
@@ -67,18 +65,17 @@ import {
   CreditCard as CreditCardIcon,
   School as SchoolIcon,
   Calendar as CalendarIcon,
-  BookOpen as BookOpenIcon
+  BookOpen
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { settingsApi, defaultSettings, planFeatures, getSafeValue } from '@/Services/settingsService';
-
-// Local fallback for authentication
-const useAuth = (): { user: any; role: string } => {
-  return { user: { name: 'Admin User', email: 'admin@silversand.edu' }, role: 'admin' };
-};
+import { settingsApi, defaultSettings, planFeatures } from '@/Services/settingsService';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SystemSettings() {
-  const { user, role } = useAuth();
+  const authContext = useAuth();
+  const user = authContext?.user;
+  const userRole = user?.role || 'admin';
+  
   const [activeTab, setActiveTab] = useState('school');
   const [isLoading, setIsLoading] = useState(true);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -86,9 +83,13 @@ export default function SystemSettings() {
   const [backupProgress, setBackupProgress] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Ref for file input
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   // State for settings data
   const [settings, setSettings] = useState(defaultSettings);
   const [systemHealth, setSystemHealth] = useState<typeof defaultSettings.systemHealth>(defaultSettings.systemHealth);
+  const [schoolStats, setSchoolStats] = useState({ totalClasses: 36, totalSubjects: 18, establishedYear: 2005 });
 
   // Local state for form inputs
   const [schoolData, setSchoolData] = useState(defaultSettings.schoolInfo || {} as any);
@@ -104,9 +105,18 @@ export default function SystemSettings() {
   const loadSettings = async () => {
     try {
       setIsLoading(true);
+      console.log('📥 Fetching settings from backend API...');
       const response = await settingsApi.getAllSettings();
+      
       if (response.success && response.data) {
         const data = response.data;
+        console.log('✅ Settings received from API:', {
+          schoolName: data.schoolInfo?.name,
+          academicYear: data.academicYear?.current,
+          notificationsCount: data.notifications?.length,
+          hasSecurityData: !!data.security
+        });
+        
         setSettings(data);
         setSchoolData(data.schoolInfo || defaultSettings.schoolInfo || {} as any);
         setAcademicData(data.academicYear || defaultSettings.academicYear || {} as any);
@@ -114,11 +124,33 @@ export default function SystemSettings() {
         if (data.security?.apiKey) {
           setApiKey(data.security.apiKey);
         }
+        
+        // Extract school statistics from mapped schoolInfo data
+        // These are already mapped by settingsApi.getAllSettings()
+        const stats = (data.schoolInfo as any) || {};
+        setSchoolStats({
+          totalClasses: stats.totalClasses || 36,
+          totalSubjects: stats.totalSubjects || 18,
+          establishedYear: stats.established ? parseInt(stats.established) : 2005
+        });
+        console.log('📊 School statistics loaded:', { 
+          totalClasses: stats.totalClasses, 
+          totalSubjects: stats.totalSubjects, 
+          establishedYear: stats.established 
+        });
+      } else {
+        console.warn('⚠️ API response missing success or data field');
+        setSettings(defaultSettings);
       }
     } catch (error: any) {
-      console.error('Error loading settings:', error);
-      toast.error('Failed to load settings. Using default settings.');
-      // Use default settings
+      console.error('❌ Error loading settings:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      toast.error('Failed to load settings from backend. Using local defaults.');
+      // Use default settings as fallback
       setSettings(defaultSettings);
     } finally {
       setIsLoading(false);
@@ -127,12 +159,14 @@ export default function SystemSettings() {
 
   const loadSystemHealth = async () => {
     try {
+      console.log('📊 Fetching system health from backend...');
       const response = await settingsApi.getSystemHealth();
       if (response.success && response.data) {
+        console.log('✅ System health data received');
         setSystemHealth(response.data);
       }
     } catch (error: any) {
-      console.error('Error loading system health:', error);
+      console.error('⚠️ Error loading system health:', error);
       // Keep using default health data
     }
   };
@@ -175,9 +209,7 @@ export default function SystemSettings() {
   const handleSaveNotificationSettings = async () => {
     try {
       setIsSaving(true);
-      const response = await settingsApi.updateNotificationSettings({
-        notifications: notificationSettings
-      });
+      const response = await settingsApi.updateNotificationSettings(notificationSettings);
       if (response.success) {
         setSettings(prev => ({ ...prev, notifications: response.data }));
         toast.success('Notification settings updated successfully');
@@ -191,12 +223,63 @@ export default function SystemSettings() {
   };
 
   // Handle toggle notification
-  const toggleNotification = (id: number) => {
-    const updated = notificationSettings.map(notif =>
-      notif.id === id ? { ...notif, enabled: !notif.enabled } : notif
-    );
+  const toggleNotification = (targetKey: string) => {
+    const updated = notificationSettings.map((notif, index) => {
+      const notifKey = String(notif.id ?? `${notif.name}-${index}`);
+      return notifKey === targetKey ? { ...notif, enabled: !notif.enabled } : notif;
+    });
     setNotificationSettings(updated);
     toast.success('Notification setting updated');
+  };
+
+  // Handle save all changes
+  const handleSaveAll = async () => {
+    try {
+      setIsSaving(true);
+      let successCount = 0;
+      let failCount = 0;
+
+      // Save school profile
+      try {
+        await settingsApi.updateSchoolProfile(schoolData);
+        successCount++;
+      } catch (error) {
+        console.error('Error saving school profile:', error);
+        failCount++;
+      }
+
+      // Save academic settings
+      try {
+        await settingsApi.updateAcademicSettings(academicData);
+        successCount++;
+      } catch (error) {
+        console.error('Error saving academic settings:', error);
+        failCount++;
+      }
+
+      // Save notification settings
+      try {
+        await settingsApi.updateNotificationSettings(notificationSettings);
+        successCount++;
+      } catch (error) {
+        console.error('Error saving notification settings:', error);
+        failCount++;
+      }
+
+      // Reload settings
+      await loadSettings();
+
+      if (failCount === 0) {
+        toast.success(`✓ All settings saved successfully (${successCount} updated)`);
+      } else {
+        toast.warning(`⚠ Partially saved: ${successCount} succeeded, ${failCount} failed`);
+      }
+    } catch (error: any) {
+      console.error('Error saving all settings:', error);
+      toast.error('Failed to save settings');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Handle logo upload
@@ -206,26 +289,61 @@ export default function SystemSettings() {
 
     if (file.size > 2 * 1024 * 1024) {
       toast.error('File size should be less than 2MB');
+      // Reset input
+      event.target.value = '';
       return;
     }
 
     try {
       setIsLoading(true);
+      console.log('📸 Uploading logo:', file.name, file.size, 'bytes');
       const response = await settingsApi.uploadLogo(file);
-      if (response.success) {
-        setSchoolData((prev: any) => ({ ...prev, logo: response.data.path }));
+      console.log('✅ Upload response:', response);
+      
+      if (response.success && response.data) {
+        const logoUrl = response.data.path || response.data.logoUrl;
+        console.log('📍 Logo URL:', logoUrl);
+        
+        // Update local state immediately for UI feedback
+        setSchoolData((prev: any) => ({ 
+          ...prev, 
+          logo: logoUrl 
+        }));
         setSettings((prev: any) => ({ 
           ...prev, 
-          schoolInfo: { ...prev.schoolInfo, logo: response.data.path } 
+          schoolInfo: { 
+            ...prev.schoolInfo, 
+            logo: logoUrl 
+          } 
         }));
-        toast.success('Logo uploaded successfully');
+        
+        // Reload all settings from backend to verify persistence in database
+        console.log('🔄 Reloading settings from backend...');
+        await loadSettings();
+        
+        toast.success('✓ Logo uploaded and saved successfully');
+      } else {
+        toast.error('Upload response missing data');
       }
     } catch (error: any) {
-      console.error('Error uploading logo:', error);
+      console.error('❌ Logo upload error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
       toast.error(error.response?.data?.message || 'Failed to upload logo');
     } finally {
       setIsLoading(false);
+      // Reset input so same file can be uploaded again
+      event.target.value = '';
     }
+  };
+
+  // Trigger file input click
+  const triggerFileInput = () => {
+    console.log('🖱️ Click triggered, opening file dialog...');
+    fileInputRef.current?.click();
   };
 
   // Handle backup
@@ -269,19 +387,32 @@ export default function SystemSettings() {
   };
 
   // Handle export
-  const handleExport = async (format: string) => {
+  const handleExport = async (_format: string) => {
     try {
-      const result = await settingsApi.exportData(format);
-      toast.success('Export initiated');
+      // Export current settings as JSON
+      const exportData = {
+        school: schoolData,
+        academic: academicData,
+        notifications: notificationSettings,
+        security: settings.security,
+        billing: settings.billing,
+        systemHealth: systemHealth,
+        exportedAt: new Date().toISOString(),
+        version: '1.0'
+      };
       
-      // Create a download link
+      // Create blob and download
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = result.downloadUrl;
-      link.download = `export_${result.exportId}.${format}`;
+      link.href = url;
+      link.download = `settings-export-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       
+      toast.success('Settings exported successfully');
     } catch (error: any) {
       console.error('Error exporting data:', error);
       toast.error(error.response?.data?.message || 'Failed to export data');
@@ -300,6 +431,10 @@ export default function SystemSettings() {
   const getHealthSetting = (key: string) => {
     // use loose indexing at runtime while preserving compile-time keys from defaultSettings
     return (systemHealth as Record<string, any>)?.[key] ?? (defaultSettings.systemHealth as Record<string, any>)?.[key] ?? '';
+  };
+
+  const getSchoolStat = (key: string) => {
+    return (schoolStats as Record<string, any>)?.[key] ?? '';
   };
 
   if (isLoading && !settings) {
@@ -328,8 +463,8 @@ export default function SystemSettings() {
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">System Settings</h1>
                 <p className="text-muted-foreground">
-                  {role === 'admin' ? 'Manage system configuration and preferences' :
-                   role === 'teacher' ? 'Configure your preferences and settings' :
+                  {userRole === 'admin' ? 'Manage system configuration and preferences' :
+                   userRole === 'teacher' ? 'Configure your preferences and settings' :
                    'System-wide configuration management'}
                 </p>
               </div>
@@ -339,10 +474,10 @@ export default function SystemSettings() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => window.location.reload()}
+              onClick={() => { loadSettings(); loadSystemHealth(); toast.success('Settings refreshed'); }}
               disabled={isLoading}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
             <Button 
@@ -354,15 +489,19 @@ export default function SystemSettings() {
               <Download className="h-4 w-4 mr-2" />
               Export Config
             </Button>
-            <Button size="sm" disabled={isLoading}>
+            <Button 
+              size="sm" 
+              disabled={isLoading || isSaving}
+              onClick={handleSaveAll}
+            >
               <Save className="h-4 w-4 mr-2" />
-              Save All Changes
+              {isSaving ? 'Saving...' : 'Save All Changes'}
             </Button>
           </div>
         </div>
 
-        {/* System Health Overview */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* System Health Overview - 6 metrics */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -403,6 +542,34 @@ export default function SystemSettings() {
                 </div>
               </div>
               <Progress value={parseFloat(getHealthSetting('storage') as string) || 45} className="mt-3" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Memory Usage</p>
+                  <p className="text-2xl font-bold">{getHealthSetting('memory')}</p>
+                </div>
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <DatabaseIcon className="h-5 w-5 text-blue-500" />
+                </div>
+              </div>
+              <Progress value={parseFloat(getHealthSetting('memory') as string) || 68} className="mt-3" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">CPU Usage</p>
+                  <p className="text-2xl font-bold">{getHealthSetting('cpu')}</p>
+                </div>
+                <div className="p-2 bg-purple-500/10 rounded-lg">
+                  <Cpu className="h-5 w-5 text-purple-500" />
+                </div>
+              </div>
+              <Progress value={parseFloat(getHealthSetting('cpu') as string) || 32} className="mt-3" />
             </CardContent>
           </Card>
           <Card>
@@ -486,18 +653,23 @@ export default function SystemSettings() {
                           )}
                         </div>
                         <input
+                          ref={fileInputRef}
                           type="file"
-                          id="logo-upload"
                           className="hidden"
                           accept="image/*"
                           onChange={handleLogoUpload}
+                          disabled={isLoading}
                         />
-                        <label htmlFor="logo-upload">
-                          <Button variant="outline" size="sm" className="mt-3 w-full">
-                            <Upload className="h-3 w-3 mr-2" />
-                            Upload Logo
-                          </Button>
-                        </label>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="mt-3 w-full" 
+                          disabled={isLoading}
+                          onClick={triggerFileInput}
+                        >
+                          <Upload className="h-3 w-3 mr-2" />
+                          {isLoading ? 'Uploading...' : 'Upload Logo'}
+                        </Button>
                       </div>
                       <div className="flex-1 space-y-2">
                         <Label>School Logo Guidelines</Label>
@@ -679,16 +851,16 @@ export default function SystemSettings() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Active Classes</span>
-                        <span className="font-semibold">36</span>
+                        <span className="font-semibold">{getSchoolStat('totalClasses')}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Subjects Offered</span>
-                        <span className="font-semibold">18</span>
+                        <span className="font-semibold">{getSchoolStat('totalSubjects')}</span>
                       </div>
                       <Separator />
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">System Active Since</span>
-                        <span className="text-sm">April 2023</span>
+                        <span className="text-sm">{getSchoolStat('establishedYear')}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -764,17 +936,17 @@ export default function SystemSettings() {
                         Current Academic Year *
                       </Label>
                       <Select 
-                        value={academicData.current || '2024-25'}
+                        value={academicData.current || '2024-2025'}
                         onValueChange={(value) => setAcademicData({...academicData, current: value})}
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="2024-25">2024-25</SelectItem>
-                          <SelectItem value="2023-24">2023-24</SelectItem>
-                          <SelectItem value="2022-23">2022-23</SelectItem>
-                          <SelectItem value="2021-22">2021-22</SelectItem>
+                          <SelectItem value="2024-2025">2024-2025</SelectItem>
+                          <SelectItem value="2023-2024">2023-2024</SelectItem>
+                          <SelectItem value="2022-2023">2022-2023</SelectItem>
+                          <SelectItem value="2021-2022">2021-2022</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -885,12 +1057,12 @@ export default function SystemSettings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cbse">CBSE (Central Board)</SelectItem>
-                          <SelectItem value="icse">ICSE (Council)</SelectItem>
-                          <SelectItem value="state">State Board</SelectItem>
-                          <SelectItem value="ib">IB (International)</SelectItem>
-                          <SelectItem value="igcse">IGCSE (Cambridge)</SelectItem>
-                          <SelectItem value="nios">NIOS (Open Schooling)</SelectItem>
+                          <SelectItem value="CBSE">CBSE (Central Board)</SelectItem>
+                          <SelectItem value="ICSE">ICSE (Council)</SelectItem>
+                          <SelectItem value="State">State Board</SelectItem>
+                          <SelectItem value="IB">IB (International)</SelectItem>
+                          <SelectItem value="IGCSE">IGCSE (Cambridge)</SelectItem>
+                          <SelectItem value="NIOS">NIOS (Open Schooling)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -908,10 +1080,10 @@ export default function SystemSettings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="english">English</SelectItem>
-                          <SelectItem value="hindi">Hindi</SelectItem>
-                          <SelectItem value="both">Both English & Hindi</SelectItem>
-                          <SelectItem value="regional">Regional Language</SelectItem>
+                          <SelectItem value="English">English</SelectItem>
+                          <SelectItem value="Hindi">Hindi</SelectItem>
+                          <SelectItem value="Both">Both English & Hindi</SelectItem>
+                          <SelectItem value="Regional">Regional Language</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1009,13 +1181,13 @@ export default function SystemSettings() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
-                  {notificationSettings.map((item) => (
-                    <div key={item.id} className="flex items-start justify-between p-4 border rounded-lg">
+                  {notificationSettings.map((item, index) => (
+                    <div key={item.id ?? `${item.name}-${index}`} className="flex items-start justify-between p-4 border rounded-lg">
                       <div className="space-y-1">
                         <Label className="text-base">{item.name}</Label>
                         <div className="flex items-center gap-2">
-                          {item.channels.map(channel => (
-                            <Badge key={channel} variant="outline" className="text-xs">
+                          {item.channels.map((channel, channelIndex) => (
+                            <Badge key={`${item.name}-${channel}-${channelIndex}`} variant="outline" className="text-xs">
                               {channel}
                             </Badge>
                           ))}
@@ -1023,7 +1195,7 @@ export default function SystemSettings() {
                       </div>
                       <Switch 
                         checked={item.enabled}
-                        onCheckedChange={() => toggleNotification(item.id)}
+                        onCheckedChange={() => toggleNotification(String(item.id ?? `${item.name}-${index}`))}
                       />
                     </div>
                   ))}

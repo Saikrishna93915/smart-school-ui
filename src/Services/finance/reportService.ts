@@ -1,6 +1,7 @@
 /**
  * Report generation service for financial data
  */
+import { getStoredToken } from '@/lib/auth/storage';
 
 export interface ReportOptions {
     startDate: string;
@@ -216,7 +217,7 @@ export interface ReportOptions {
     }
     
     private getAuthToken(): string {
-      return localStorage.getItem('authToken') || '';
+      return getStoredToken() || '';
     }
   }
   

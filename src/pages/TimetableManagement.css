@@ -1,0 +1,260 @@
+/* Timetable Management Page Styles */
+
+.timetable-management {
+  padding-bottom: 40px;
+}
+
+/* Page Header */
+.page-header {
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  color: white;
+  padding: 40px 20px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.header-content h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.header-content p {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.9;
+  max-width: 100%;
+}
+
+/* Filter Section */
+.filter-section {
+  max-width: 1200px;
+  margin: -20px auto 30px;
+  padding: 0 20px;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.filter-input {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.filter-input:hover {
+  border-color: #999;
+}
+
+.filter-input:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+}
+
+/* Content Section */
+.content-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background: white;
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.empty-state svg {
+  margin-bottom: 20px;
+  color: #ddd;
+}
+
+.empty-state h3 {
+  margin: 0 0 10px 0;
+  font-size: 20px;
+  color: #666;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+  color: #999;
+}
+
+/* Help Section */
+.help-section {
+  max-width: 1200px;
+  margin: 40px auto 0;
+  padding: 30px 20px;
+  background: #f0f4f8;
+  border-radius: 8px;
+  border-left: 4px solid #1976d2;
+}
+
+.help-section h3 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  color: #1565c0;
+}
+
+.help-section ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.help-section li {
+  padding: 10px 0;
+  border-bottom: 1px solid #e0e0e0;
+  line-height: 1.6;
+  color: #333;
+  font-size: 14px;
+}
+
+.help-section li:last-child {
+  border-bottom: none;
+}
+
+.help-section strong {
+  color: #1565c0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .page-header {
+    padding: 30px 15px;
+    margin-bottom: 20px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .header-content h1 {
+    font-size: 24px;
+  }
+
+  .filters {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 15px;
+  }
+
+  .filter-section {
+    margin: -15px auto 20px;
+    padding: 0 15px;
+  }
+
+  .content-section {
+    padding: 0 15px;
+  }
+
+  .help-section {
+    padding: 20px 15px;
+    margin: 30px auto 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header {
+    padding: 25px 12px;
+    margin-bottom: 15px;
+  }
+
+  .header-content h1 {
+    font-size: 20px;
+  }
+
+  .header-content p {
+    font-size: 14px;
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-section {
+    margin: -12px auto 15px;
+    padding: 0 12px;
+  }
+
+  .content-section {
+    padding: 0 12px;
+  }
+}
+
+/* Error Message */
+.error-message {
+  max-width: 1200px;
+  margin: 60px auto;
+  padding: 60px 40px;
+  text-align: center;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 2px solid #ef4444;
+}
+
+.error-message svg {
+  color: #ef4444;
+  margin-bottom: 20px;
+}
+
+.error-message h3 {
+  margin: 0 0 10px 0;
+  color: #1f2937;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.error-message p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+}

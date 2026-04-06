@@ -39,7 +39,8 @@ import {
   Eye,
   FileSignature,
   CalendarDays,
-  School
+  School,
+  RefreshCw
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { Separator } from '@/components/ui/separator';
@@ -47,6 +48,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import certificateService, { Certificate as CertificateType } from '@/Services/certificateService';
 
 /**
  * Local fallback QR code generator returning a data URL.
@@ -94,60 +96,18 @@ const generateQRCode = async (data: string): Promise<string> => {
   return canvas.toDataURL('image/png');
 };
 
-// Mock Data: Issued Certificates
-const issuedCertificates = [
-  { 
-    id: 'CERT-2024-001', 
-    student: 'Arjun Verma', 
-    studentId: 'STU-001',
-    type: 'Study Certificate', 
-    date: '2024-11-15', 
-    status: 'verified',
-    course: 'Class 10',
-    reason: 'Outstanding Academic Performance'
-  },
-  { 
-    id: 'CERT-2024-002', 
-    student: 'Priya Patel', 
-    studentId: 'STU-045',
-    type: 'Sports Achievement', 
-    date: '2024-11-10', 
-    status: 'verified',
-    course: 'Class 12',
-    reason: 'State Level Basketball Championship'
-  },
-  { 
-    id: 'CERT-2024-003', 
-    student: 'Rohit Sharma', 
-    studentId: 'STU-078',
-    type: 'Medical Certificate', 
-    date: '2024-11-05', 
-    status: 'pending',
-    course: 'Class 9',
-    reason: 'Medical Leave - Dengue Fever'
-  },
-  { 
-    id: 'CERT-2024-004', 
-    student: 'Kavya Singh', 
-    studentId: 'STU-112',
-    type: 'School Leaving', 
-    date: '2024-10-28', 
-    status: 'verified',
-    course: 'Class 12',
-    reason: 'Transfer Certificate'
-  },
-];
-
 // Certificate Types for School
 const certificateTypes = [
-  { value: 'study', label: 'Study Certificate', icon: BookOpen },
-  { value: 'medical', label: 'Medical Certificate', icon: HeartPulse },
-  { value: 'transfer', label: 'School Leaving Certificate', icon: Users },
-  { value: 'character', label: 'Character Certificate', icon: User },
-  { value: 'sports', label: 'Sports Achievement', icon: Award },
-  { value: 'merit', label: 'Merit Certificate', icon: GraduationCap },
-  { value: 'bonafide', label: 'Bonafide Certificate', icon: FileCheck },
-  { value: 'conduct', label: 'Conduct Certificate', icon: ShieldCheck },
+  { value: 'Study Certificate', label: 'Study Certificate', icon: BookOpen },
+  { value: 'Medical Certificate', label: 'Medical Certificate', icon: HeartPulse },
+  { value: 'Transfer Certificate', label: 'Transfer Certificate', icon: Users },
+  { value: 'Character Certificate', label: 'Character Certificate', icon: User },
+  { value: 'Sports Certificate', label: 'Sports Certificate', icon: Award },
+  { value: 'Merit Certificate', label: 'Merit Certificate', icon: GraduationCap },
+  { value: 'Bonafide Certificate', label: 'Bonafide Certificate', icon: FileCheck },
+  { value: 'Conduct Certificate', label: 'Conduct Certificate', icon: ShieldCheck },
+  { value: 'Attendance Certificate', label: 'Attendance Certificate', icon: CalendarDays },
+  { value: 'Leaving Certificate', label: 'Leaving Certificate', icon: FileSignature },
 ];
 
 export default function Certificates() {
@@ -155,29 +115,76 @@ export default function Certificates() {
   const [searchQuery, setSearchQuery] = useState('');
   const certificateRef = useRef<HTMLDivElement>(null);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [certificates, setCertificates] = useState<CertificateType[]>([]);
+  const [stats, setStats] = useState({
+    totalIssued: 0,
+    pending: 0,
+    verificationRate: 98,
+    certificateTypes: certificateTypes.length
+  });
+  // TODO: Add student selector in future
+  // const [selectedStudent, setSelectedStudent] = useState<any>(null);
   
   // State for Generator
   const [formData, setFormData] = useState({
-    studentName: 'Arjun Verma',
-    studentId: 'STU-001',
-    fatherName: 'Rajesh Verma',
-    motherName: 'Sunita Verma',
-    address: '123, Gandhi Road, Mumbai - 400001',
-    course: 'Class 10 (Section A)',
-    type: 'study',
+    studentName: '',
+    studentId: '',
+    fatherName: '',
+    motherName: '',
+    address: '',
+    course: '',
+    section: '',
+    type: 'Bonafide Certificate',
     date: new Date().toISOString().split('T')[0],
     validFrom: new Date().toISOString().split('T')[0],
     validTo: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    reason: 'For scholarship application purposes',
+    reason: '',
     additionalNotes: '',
-    academicYear: '2024-2025',
-    rollNumber: '1024',
-    percentage: '92.5%',
-    attendance: '95%'
+    academicYear: '2025-2026',
+    rollNumber: '',
+    percentage: '',
+    attendance: ''
   });
 
-  // Generate certificate ID
-  const certificateId = `CERT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
+  const [certificateId, setCertificateId] = useState('');
+
+  // Load certificates and stats on mount
+  useEffect(() => {
+    loadCertificates();
+    loadStats();
+  }, []);
+
+  const loadCertificates = async () => {
+    try {
+      setLoading(true);
+      const { certificates: data } = await certificateService.getCertificates({
+        limit: 100,
+        sortBy: 'createdAt',
+        sortOrder: 'desc'
+      });
+      setCertificates(data);
+    } catch (error) {
+      console.error('Failed to load certificates:', error);
+      toast.error('Failed to load certificates');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const data = await certificateService.getCertificateStats();
+      setStats({
+        totalIssued: data.totalIssued,
+        pending: data.pending,
+        verificationRate: data.verificationRate,
+        certificateTypes: certificateTypes.length
+      });
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    }
+  };
 
   // Generate QR code on component mount and when data changes
   useEffect(() => {
@@ -204,30 +211,34 @@ export default function Certificates() {
   const [verifiedCertificate, setVerifiedCertificate] = useState<any>(null);
 
   // Filter certificates based on search
-  const filteredCertificates = issuedCertificates.filter(cert =>
-    cert.student.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    cert.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    cert.type.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredCertificates = certificates.filter(cert =>
+    cert.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    cert.certificateId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    cert.certificateType.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (!verifyId.trim()) {
       toast.error('Please enter a Certificate ID');
       return;
     }
     
-    const foundCert = issuedCertificates.find(cert => 
-      cert.id.toLowerCase() === verifyId.toLowerCase().trim()
-    );
-    
-    if (foundCert) {
-      setVerificationResult('valid');
-      setVerifiedCertificate(foundCert);
-      toast.success('Certificate verified successfully!');
-    } else {
+    try {
+      const result = await certificateService.verifyCertificate(verifyId.trim());
+      
+      if (result.verified) {
+        setVerificationResult('valid');
+        setVerifiedCertificate(result.data);
+        toast.success('Certificate verified successfully!');
+      } else {
+        setVerificationResult('invalid');
+        setVerifiedCertificate(null);
+        toast.error('Invalid Certificate ID');
+      }
+    } catch (error) {
       setVerificationResult('invalid');
       setVerifiedCertificate(null);
-      toast.error('Invalid Certificate ID');
+      toast.error('Failed to verify certificate');
     }
   };
 
@@ -387,49 +398,75 @@ export default function Certificates() {
     }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!formData.studentName.trim() || !formData.course.trim()) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    toast.success('Certificate generated successfully!');
-    
-    // In a real app, you would save to backend here
-    const newCertificate = {
-      id: certificateId,
-      student: formData.studentName,
-      studentId: formData.studentId,
-      type: certificateTypes.find(t => t.value === formData.type)?.label || formData.type,
-      date: formData.date,
-      status: 'verified' as const,
-      course: formData.course,
-      reason: formData.reason
-    };
+    // Note: For now, use manual student ID entry
+    // TODO: Add student selector dropdown
+    if (!formData.studentId) {
+      toast.error('Please provide a valid Student ID');
+      return;
+    }
 
-    // Add to history (in real app, this would be API call)
-    issuedCertificates.unshift(newCertificate);
-    
-    toast.info('Certificate saved to history');
+    try {
+      const certificateData = {
+        studentId: formData.studentId, // Using manual entry for now
+        certificateType: formData.type,
+        class: formData.course,
+        section: formData.section,
+        academicYear: formData.academicYear,
+        purpose: formData.reason,
+        issueDate: formData.date,
+        validUntil: formData.validTo || undefined,
+        additionalNotes: formData.additionalNotes || undefined,
+        percentage: formData.percentage ? parseFloat(formData.percentage) : undefined,
+        attendance: formData.attendance ? parseFloat(formData.attendance) : undefined,
+      };
+
+      const newCert = await certificateService.createCertificate(certificateData);
+      
+      toast.success('Certificate generated successfully!');
+      
+      // Update state with new certificate
+      setCertificateId(newCert.certificateId);
+      setQrCodeDataUrl(newCert.qrCode || '');
+      
+      // Reload certificates list
+      await loadCertificates();
+      await loadStats();
+      
+      toast.info('Certificate saved to history');
+    } catch (error: any) {
+      console.error('Failed to generate certificate:', error);
+      toast.error(error.response?.data?.message || 'Failed to generate certificate');
+    }
   };
 
   const getCertificateText = () => {
-    switch(formData.type) {
-      case 'study':
-        return `This is to certify that ${formData.studentName} (Student ID: ${formData.studentId}, Roll No: ${formData.rollNumber}) has successfully completed ${formData.course} for the academic year ${formData.academicYear} with ${formData.percentage} marks and ${formData.attendance} attendance.`;
-      case 'medical':
+    const certType = formData.type;
+    switch(certType) {
+      case 'Study Certificate':
+        return `This is to certify that ${formData.studentName} (Student ID: ${formData.studentId}, Roll No: ${formData.rollNumber}) has successfully completed ${formData.course} for the academic year ${formData.academicYear}${formData.percentage ? ` with ${formData.percentage}% marks` : ''}${formData.attendance ? ` and ${formData.attendance}% attendance` : ''}.`;
+      case 'Medical Certificate':
         return `This is to certify that ${formData.studentName} is medically certified to be suffering from ${formData.reason} and is granted leave from ${formData.validFrom} to ${formData.validTo}.`;
-      case 'transfer':
+      case 'Transfer Certificate':
         return `This is to certify that ${formData.studentName} has studied in ${formData.course} during the academic year ${formData.academicYear} and his/her conduct has been satisfactory. This certificate is issued for the purpose of transfer to another institution.`;
-      case 'character':
+      case 'Character Certificate':
         return `This is to certify that ${formData.studentName} has been a student of this institution from ${formData.academicYear}. During this period, his/her conduct and character have been exemplary and commendable.`;
-      case 'sports':
-      case 'merit':
+      case 'Sports Certificate':
+      case 'Merit Certificate':
         return `This is to certify that ${formData.studentName} has shown outstanding performance in ${formData.reason} during the academic year ${formData.academicYear} while studying in ${formData.course}.`;
-      case 'bonafide':
+      case 'Bonafide Certificate':
         return `This is to certify that ${formData.studentName} is a bonafide student of this institution studying in ${formData.course} for the academic year ${formData.academicYear}.`;
-      case 'conduct':
+      case 'Conduct Certificate':
         return `This is to certify that ${formData.studentName} has maintained excellent conduct and discipline during his/her studies in ${formData.course} for the academic year ${formData.academicYear}.`;
+      case 'Attendance Certificate':
+        return `This is to certify that ${formData.studentName} maintained ${formData.attendance || 'N/A'}% attendance in ${formData.course} during the academic year ${formData.academicYear}.`;
+      case 'Leaving Certificate':
+        return `This is to certify that ${formData.studentName} studied in ${formData.course} during the academic year ${formData.academicYear}. All dues have been cleared and the student is eligible for transfer.`;
       default:
         return `This is to certify that ${formData.studentName} has been associated with our institution.`;
     }
@@ -445,6 +482,10 @@ export default function Certificates() {
             <p className="text-muted-foreground text-sm md:text-base">Generate, manage, and verify official school documents</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={loadCertificates} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setActiveTab('history')}>
               <History className="h-4 w-4 mr-2" />
               View History
@@ -460,31 +501,34 @@ export default function Certificates() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Issued"
-            value={issuedCertificates.length.toString()}
+            value={stats.totalIssued.toString()}
             subtitle="This academic year"
             icon={FileText}
             variant="primary"
+            loading={loading}
           />
           <StatCard
             title="Verified"
-            value="98%"
+            value={`${stats.verificationRate}%`}
             subtitle="Authenticity rate"
             icon={ShieldCheck}
             variant="success"
+            loading={loading}
           />
           <StatCard
             title="Certificate Types"
-            value={certificateTypes.length.toString()}
+            value={stats.certificateTypes.toString()}
             subtitle="Available formats"
             icon={Award}
             variant="warning"
           />
           <StatCard
             title="Pending"
-            value={issuedCertificates.filter(c => c.status === 'pending').length.toString()}
+            value={stats.pending.toString()}
             subtitle="Awaiting approval"
             icon={History}
             variant="default"
+            loading={loading}
           />
         </div>
 
@@ -855,59 +899,112 @@ export default function Certificates() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredCertificates.map((cert) => (
-                          <TableRow key={cert.id} className="hover:bg-muted/30">
-                            <TableCell className="font-mono text-xs">{cert.id}</TableCell>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium">{cert.student}</p>
-                                <p className="text-xs text-muted-foreground">{cert.studentId}</p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {(() => {
-                                  const type = certificateTypes.find(t => t.label === cert.type);
-                                  const Icon = type?.icon || FileText;
-                                  return <Icon className="h-4 w-4 text-primary" />;
-                                })()}
-                                <span className="text-sm">{cert.type}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-sm">{cert.course}</TableCell>
-                            <TableCell>
-                              <div>
-                                <p className="text-sm">{cert.date}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(cert.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant={cert.status === 'verified' ? 'default' : 'secondary'}
-                                className="text-xs"
-                              >
-                                {cert.status === 'verified' ? (
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                ) : (
-                                  <History className="h-3 w-3 mr-1" />
-                                )}
-                                {cert.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-1">
-                                <Button variant="ghost" size="icon-sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon-sm">
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                              </div>
+                        {loading ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              Loading certificates...
                             </TableCell>
                           </TableRow>
-                        ))}
+                        ) : filteredCertificates.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              No certificates found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredCertificates.map((cert) => (
+                            <TableRow key={cert._id} className="hover:bg-muted/30">
+                              <TableCell className="font-mono text-xs">{cert.certificateId}</TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium">{cert.studentName}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {cert.admissionNumber || cert.rollNumber || 'N/A'}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {(() => {
+                                    const type = certificateTypes.find(t => t.label === cert.certificateType);
+                                    const Icon = type?.icon || FileText;
+                                    return <Icon className="h-4 w-4 text-primary" />;
+                                  })()}
+                                  <span className="text-sm">{cert.certificateType}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {cert.class}{cert.section ? ` (${cert.section})` : ''}
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="text-sm">
+                                    {new Date(cert.issueDate).toLocaleDateString('en-US')}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(cert.issueDate).toLocaleDateString('en-US', { weekday: 'short' })}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={
+                                    cert.status === 'Issued' ? 'default' : 
+                                    cert.status === 'Pending' ? 'secondary' : 
+                                    cert.status === 'Approved' ? 'outline' : 
+                                    'destructive'
+                                  }
+                                  className="text-xs"
+                                >
+                                  {cert.status === 'Issued' ? (
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                  ) : cert.status === 'Pending' ? (
+                                    <History className="h-3 w-3 mr-1" />
+                                  ) : cert.status === 'Approved' ? (
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                  ) : (
+                                    <XCircle className="h-3 w-3 mr-1" />
+                                  )}
+                                  {cert.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon-sm"
+                                    onClick={() => {
+                                      // View certificate details
+                                      setVerifyId(cert.certificateId);
+                                      setActiveTab('verify');
+                                      handleVerify();
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  {cert.qrCode && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon-sm"
+                                      onClick={() => {
+                                        // Download QR code or certificate
+                                        if (cert.qrCode) {
+                                          const link = document.createElement('a');
+                                          link.href = cert.qrCode;
+                                          link.download = `${cert.certificateId}_QR.png`;
+                                          link.click();
+                                          toast.success('QR Code downloaded');
+                                        }
+                                      }}
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
                       </TableBody>
                     </Table>
                   </div>
@@ -965,22 +1062,54 @@ export default function Certificates() {
                       
                       <div className="bg-white p-4 rounded-lg border space-y-3 text-left">
                         <div className="flex justify-between">
+                          <span className="text-muted-foreground">Certificate ID:</span>
+                          <span className="font-medium font-mono">{verifiedCertificate.certificateId}</span>
+                        </div>
+                        <div className="flex justify-between">
                           <span className="text-muted-foreground">Student:</span>
-                          <span className="font-medium">{verifiedCertificate.student}</span>
+                          <span className="font-medium">{verifiedCertificate.studentName}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Certificate Type:</span>
-                          <span className="font-medium">{verifiedCertificate.type}</span>
+                          <span className="font-medium">{verifiedCertificate.certificateType}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Class:</span>
+                          <span className="font-medium">{verifiedCertificate.class}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Academic Year:</span>
+                          <span className="font-medium">{verifiedCertificate.academicYear}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Date Issued:</span>
-                          <span className="font-medium">{verifiedCertificate.date}</span>
+                          <span className="font-medium">
+                            {new Date(verifiedCertificate.issueDate).toLocaleDateString('en-US')}
+                          </span>
                         </div>
+                        {verifiedCertificate.validUntil && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Valid Until:</span>
+                            <span className="font-medium">
+                              {new Date(verifiedCertificate.validUntil).toLocaleDateString('en-US')}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Status:</span>
                           <Badge variant="default" className="bg-success/20 text-success">
-                            Verified
+                            {verifiedCertificate.status}
                           </Badge>
+                        </div>
+                        {verifiedCertificate.approvedBy && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Approved By:</span>
+                            <span className="font-medium">{verifiedCertificate.approvedBy}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Verified Count:</span>
+                          <span className="font-medium">{verifiedCertificate.verificationCount} times</span>
                         </div>
                       </div>
                     </div>

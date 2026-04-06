@@ -1,4 +1,4 @@
-// src/pages/finance/Collections.tsx - UPDATED VERSION
+// src/pages/finance/Collections.tsx - PRODUCTION VERSION
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,6 @@ import {
   Clock,
   Building,
   Smartphone,
-  Mail,
   FileText,
   Printer,
   Share2,
@@ -78,7 +77,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 // Import the service
-import { collectionsService, type Collection, type CollectionsResponse } from '@/Services/collectionsService';
+import { collectionsService, type Collection } from '@/Services/collectionsService';
 
 // Mock data for fallback
 const MOCK_COLLECTIONS = [
@@ -126,7 +125,7 @@ const Collections = () => {
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [statusUpdateNotes, setStatusUpdateNotes] = useState('');
   const [newStatus, setNewStatus] = useState('completed');
-  
+
   // Data states
   const [collections, setCollections] = useState<Collection[]>([]);
   const [statistics, setStatistics] = useState({
@@ -157,23 +156,21 @@ const Collections = () => {
         status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
         paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter : undefined,
         page: 1,
-        limit: 50,
-        sortBy: 'paymentDate',
-        sortOrder: 'desc'
+        limit: 50
       };
 
       // Remove undefined values
       Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
 
       const response = await collectionsService.getCollections(params);
-      
+
       if (response.success) {
         setCollections(response.collections || []);
-        
+
         if (response.statistics) {
           setStatistics(response.statistics);
         }
-        
+
         // Transform distribution data for charts
         if (response.distributions) {
           // Monthly trend
@@ -183,7 +180,7 @@ const Collections = () => {
             transactions: item.count || 0
           })) || [];
           setMonthlyTrend(monthlyData);
-          
+
           // Payment method distribution
           const methodData = response.distributions.methodDistribution?.map((item: any) => {
             const methodName = formatPaymentMethod(item._id);
@@ -196,7 +193,7 @@ const Collections = () => {
           }) || [];
           setPaymentMethodData(methodData);
         }
-        
+
         toast.success(`Loaded ${response.collections?.length || 0} collections`);
       } else {
         const errMsg = (response as any)?.message || (response as any)?.error || 'Failed to load collections';
@@ -836,11 +833,13 @@ const Collections = () => {
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
-                            variant="ghost"
+                            variant="default"
                             size="sm"
-                            onClick={() => handleViewDetails(collection.receiptNumber)}
+                            onClick={() => window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank')}
+                            className="bg-blue-600 hover:bg-blue-700"
                           >
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-4 w-4 mr-1" />
+                            Receipt
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -849,9 +848,20 @@ const Collections = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleDownloadReceipt(collection.receiptNumber, 'html')}>
-                                <FileText className="h-4 w-4 mr-2" />
-                                Download Receipt
+                              <DropdownMenuItem onClick={() => window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank')}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Receipt
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                const printWindow = window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank');
+                                if (printWindow) {
+                                  setTimeout(() => {
+                                    printWindow.print();
+                                  }, 1000);
+                                }
+                              }}>
+                                <Printer className="h-4 w-4 mr-2" />
+                                Print Receipt
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setSelectedCollection(collection);
@@ -927,22 +937,28 @@ const Collections = () => {
                     
                     <div className="flex gap-2">
                       <Button
-                        variant="outline"
+                        className="flex-1 bg-blue-600 hover:bg-blue-700"
                         size="sm"
-                        className="flex-1"
-                        onClick={() => handleViewDetails(collection.receiptNumber)}
+                        onClick={() => window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank')}
                       >
                         <Eye className="h-3 w-3 mr-1" />
-                        View Details
+                        Receipt
                       </Button>
                       <Button 
                         variant="outline" 
                         size="sm" 
                         className="flex-1"
-                        onClick={() => handleDownloadReceipt(collection.receiptNumber, 'html')}
+                        onClick={() => {
+                          const printWindow = window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank');
+                          if (printWindow) {
+                            setTimeout(() => {
+                              printWindow.print();
+                            }, 1000);
+                          }
+                        }}
                       >
-                        <FileText className="h-3 w-3 mr-1" />
-                        Receipt
+                        <Printer className="h-3 w-3 mr-1" />
+                        Print
                       </Button>
                     </div>
                   </CardContent>
@@ -1054,37 +1070,55 @@ const Collections = () => {
 
               <Separator />
 
-              <div>
-                <h4 className="font-medium mb-3">Notes</h4>
-                <p className="text-sm text-muted-foreground">{selectedCollection.notes || selectedCollection.description || 'No notes available'}</p>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button 
-                  className="flex-1"
-                  onClick={() => handleDownloadReceipt(selectedCollection.receiptNumber, 'html')}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Download Receipt
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => {
-                    setShowStatusDialog(true);
-                  }}
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Update Status
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => navigator.clipboard.writeText(selectedCollection.receiptNumber)}
-                >
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Copy Receipt No
-                </Button>
+              <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-sm mb-4 text-gray-700">Receipt & Actions</h4>
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Receipt No</p>
+                    <p className="font-bold text-sm">{selectedCollection.receiptNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Amount Paid</p>
+                    <p className="font-bold text-lg text-green-600">{formatCurrency(selectedCollection.amount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Payment Date</p>
+                    <p className="font-medium text-sm">{formatDate(selectedCollection.paymentDate)}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    onClick={() => window.open(`/finance/receipt/${encodeURIComponent(selectedCollection.receiptNumber)}`, '_blank')}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Receipt
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      const printWindow = window.open(`/finance/receipt/${encodeURIComponent(selectedCollection.receiptNumber)}`, '_blank');
+                      if (printWindow) {
+                        setTimeout(() => {
+                          printWindow.print();
+                        }, 1000);
+                      }
+                    }}
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setShowStatusDialog(true);
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Status
+                  </Button>
+                </div>
               </div>
             </div>
           </DialogContent>

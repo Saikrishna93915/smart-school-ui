@@ -1,9 +1,23 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import apiClient from "../Services/apiClient";
 import { User, UserRole } from "../types/auth";
+import { clearStoredAuth, getStoredToken, getStoredUser, setStoredAuth } from "@/lib/auth/storage";
 
 const TOKEN_KEY = "token";
 const USER_KEY = "user";
+
+/**
+ * SESSION STORAGE STRATEGY FOR TAB ISOLATION
+ * ==========================================
+ * Using sessionStorage instead of localStorage to ensure:
+ * 1. Each browser tab has its own independent session
+ * 2. Login as student in Tab 1, admin in Tab 2 → each maintains separate auth
+ * 3. Refreshing Tab 1 keeps the Tab 1 session (not the latest from other tabs)
+ * 4. JWT token (30 min expiry) persists on refresh within the same tab
+ * 5. Closing the tab clears its session automatically
+ *
+ * Fallback to localStorage on initial load for backward compatibility
+ */
 
 interface AuthContextType {
   user: User | null;
@@ -30,14 +44,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const restoreSession = () => {
       try {
-        const storedToken = localStorage.getItem(TOKEN_KEY);
-        const storedUser = localStorage.getItem(USER_KEY);
+        // First try sessionStorage (tab-specific)
+        let storedToken = sessionStorage.getItem(TOKEN_KEY);
+        let storedUser = sessionStorage.getItem(USER_KEY);
+
+        // Fallback to localStorage during initial login if sessionStorage is empty
+        if (!storedToken) {
+          storedToken = getStoredToken();
+          storedUser = getStoredUser();
+          
+          // If found in localStorage, move to sessionStorage for this tab
+          if (storedToken && storedUser) {
+            sessionStorage.setItem(TOKEN_KEY, storedToken);
+            sessionStorage.setItem(USER_KEY, storedUser);
+            // Keep in localStorage too for backward compatibility
+          }
+        }
 
         if (storedToken && storedUser) {
           const parsedUser = JSON.parse(storedUser) as User;
           
           // Validate stored user data
           if (parsedUser && parsedUser.role && parsedUser.name) {
+            console.log(`✅ Session restored for user: ${parsedUser.name} (${parsedUser.role})`);
             setToken(storedToken);
             setUser(parsedUser);
             apiClient.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
@@ -45,6 +74,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             // Invalid stored user data, clear it
             clearAuth();
           }
+        } else {
+          console.log('ℹ️ No existing session found');
         }
       } catch (error) {
         console.error("Error restoring session:", error);
@@ -61,11 +92,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
      CLEAR AUTH DATA
   ========================= */
   const clearAuth = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    // Clear from both sessionStorage (this tab) and localStorage
+    clearStoredAuth();
     delete apiClient.defaults.headers.common["Authorization"];
     setUser(null);
     setToken(null);
+    console.log('✋ Auth cleared');
   }, []);
 
   /* =========================
@@ -97,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // Only proceed if we have a successful response (200-299)
       if (response.status >= 200 && response.status < 300) {
-        const { token, role: userRole, name, forcePasswordChange } = response.data;
+        const { token, role: userRole, name, forcePasswordChange, _id, id } = response.data;
 
         // Validate required fields in response
         if (!token || !userRole || !name) {
@@ -105,15 +137,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         const userData: User = {
+          _id: _id || id,
+          id: id || _id,
           name,
           role: userRole,
           forcePasswordChange: forcePasswordChange || false,
           email,
         };
 
-        // Store auth data
-        localStorage.setItem(TOKEN_KEY, token);
-        localStorage.setItem(USER_KEY, JSON.stringify(userData));
+        // Store in BOTH sessionStorage (this tab) and localStorage (backup)
+        // sessionStorage ensures each tab has its own session
+        // localStorage is fallback for backward compatibility
+        setStoredAuth(token, JSON.stringify(userData));
 
         // Update axios defaults
         apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -121,6 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // Update state
         setToken(token);
         setUser(userData);
+        console.log(`✅ Login successful: ${userData.name} (${userData.role}) - Session stored in sessionStorage`);
 
         return; // Success
       } else {
@@ -180,7 +216,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const responseInterceptor = apiClient.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401) {
+        const requestUrl = (error.config?.url || '') as string;
+        const isAuthEndpoint = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/logout');
+
+        if (error.response?.status === 401 && !isAuthEndpoint) {
           // Auto-logout on 401
           console.warn("Auto-logout due to 401 response");
           logout();

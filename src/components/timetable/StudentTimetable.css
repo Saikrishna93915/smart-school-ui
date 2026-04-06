@@ -1,0 +1,737 @@
+.student-timetable-container {
+  padding: 24px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  min-height: 100vh;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Header Section */
+.st-header {
+  margin-bottom: 32px;
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.st-title {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.st-title h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.st-title p {
+  margin: 4px 0 0 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.st-title svg {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+/* Today's Classes */
+.todays-classes {
+  margin-bottom: 32px;
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #f59e0b;
+}
+
+.todays-classes h2 {
+  margin: 0 0 16px 0;
+  font-size: 20px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.today-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.today-card {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef8c3 100%);
+  padding: 16px;
+  border-radius: 8px;
+  border: 2px solid #fcd34d;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.today-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+}
+
+.today-time {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.time-badge {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 16px;
+  min-width: 60px;
+  text-align: center;
+}
+
+.time-duration {
+  color: #666;
+  font-size: 12px;
+}
+
+.today-details h3 {
+  margin: 0 0 8px 0;
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.today-details p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #374151;
+}
+
+.today-details strong {
+  color: #1f2937;
+}
+
+.no-classes-today {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border: 2px dashed #10b981;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 16px;
+  color: #047857;
+  margin-bottom: 32px;
+  font-weight: 500;
+}
+
+/* Stats */
+.st-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-number {
+  font-size: 32px;
+  font-weight: 700;
+  color: #f59e0b;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  color: #666;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Weekly Timetable */
+.weekly-timetable {
+  margin-bottom: 32px;
+}
+
+.weekly-timetable h2 {
+  font-size: 20px;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+  font-weight: 600;
+}
+
+.tt-wrapper {
+  background: white;
+  border-radius: 12px;
+  overflow: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.student-timetable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.student-timetable thead {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.student-timetable th {
+  padding: 16px 8px;
+  color: white;
+  font-weight: 600;
+  text-align: center;
+  border-bottom: 2px solid #d97706;
+}
+
+.student-timetable th.time-col {
+  min-width: 120px;
+  text-align: left;
+  padding-left: 12px;
+}
+
+.student-timetable th.day-col {
+  min-width: 140px;
+  position: relative;
+}
+
+.student-timetable th.day-col.today {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+
+.today-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.3);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+.student-timetable tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background 0.2s ease;
+}
+
+.student-timetable tbody tr:hover {
+  background: #f9fafb;
+}
+
+.period-row:nth-child(odd) {
+  background: #fafbfc;
+}
+
+/* Time Cell */
+.time-cell {
+  padding: 12px;
+  font-weight: 500;
+  background: #f9a825;
+  color: white;
+  vertical-align: middle;
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  border-right: 2px solid #d97706;
+}
+
+.time-info {
+  text-align: left;
+}
+
+.slot-name {
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.slot-time {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* Period Cell */
+.period-cell {
+  padding: 8px;
+  text-align: center;
+  vertical-align: middle;
+  height: 120px;
+  transition: all 0.2s ease;
+}
+
+.period-cell.assigned {
+  background: linear-gradient(135deg, #fff8e1 0%, #ffe0b2 100%);
+}
+
+.period-cell.free {
+  background: #f9fafb;
+}
+
+.period-cell.today-cell {
+  border-top: 3px solid #f59e0b;
+  border-bottom: 3px solid #f59e0b;
+}
+
+.period-cell.free.today-cell {
+  background: #fffbeb;
+}
+
+.class-slot {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  padding: 8px;
+  border-radius: 6px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+  transition: all 0.2s ease;
+}
+
+.class-slot.lab {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+.class-slot:hover {
+  box-shadow: 0 4px 8px rgba(245, 158, 11, 0.4);
+  transform: translateY(-2px);
+}
+
+.subject-title {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+
+.teacher-name {
+  font-size: 11px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+
+.room-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+.lab-indicator {
+  font-size: 16px;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.free-period {
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  margin-top: 4px;
+  background: rgba(34, 197, 94, 0.2);
+  color: #16a34a;
+  border: 1px solid #22c55e;
+}
+
+.lab-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(168, 85, 247, 0.2);
+  color: #7c3aed;
+  border: 1px solid #a78bfa;
+  margin-left: 8px;
+}
+
+/* Classes List */
+.classes-list {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.classes-list h2 {
+  margin: 0 0 24px 0;
+  font-size: 20px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.days-schedule {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.day-card {
+  background: #f9fafb;
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid #f59e0b;
+  transition: all 0.2s ease;
+}
+
+.day-card.today {
+  background: #fffbeb;
+  border-left-color: #d97706;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+}
+
+.day-name {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: #f59e0b;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.today-label {
+  background: #f59e0b;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.classes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.class-item {
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.class-item:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.class-time {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 50px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.class-body {
+  flex: 1;
+}
+
+.class-body h4 {
+  margin: 0 0 4px 0;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.class-body p {
+  margin: 2px 0;
+  font-size: 12px;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.class-body p.teacher {
+  color: #666;
+}
+
+.class-body p.room {
+  color: #666;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.empty-state svg {
+  color: #d1d5db;
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  color: #1f2937;
+  font-size: 18px;
+  margin: 16px 0 8px 0;
+}
+
+.empty-state p {
+  color: #6b7280;
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.empty-state .contact-hint {
+  color: #9ca3af;
+  margin-top: 8px;
+}
+
+/* Error State */
+.error-state {
+  text-align: center;
+  padding: 48px 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.error-state svg {
+  color: #ef4444;
+  margin-bottom: 16px;
+}
+
+.error-state h3 {
+  color: #1f2937;
+  font-size: 18px;
+  margin: 16px 0 8px 0;
+}
+
+.error-state p {
+  color: #6b7280;
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.retry-btn {
+  padding: 10px 16px;
+  background: #f59e0b;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-top: 16px;
+  transition: all 0.3s ease;
+}
+
+.retry-btn:hover {
+  background: #d97706;
+}
+
+/* Loader */
+.loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #f59e0b;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loader p {
+  color: #666;
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .today-list {
+    grid-template-columns: 1fr;
+  }
+
+  .days-schedule {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .student-timetable-container {
+    padding: 16px;
+  }
+
+  .st-header {
+    padding: 16px;
+  }
+
+  .st-title {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .st-title h1 {
+    font-size: 22px;
+  }
+
+  .st-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .tt-wrapper {
+    overflow-x: auto;
+  }
+
+  .student-timetable {
+    font-size: 12px;
+  }
+
+  .student-timetable th.day-col {
+    min-width: 100px;
+    padding: 8px 4px;
+  }
+
+  .time-cell {
+    padding: 8px 4px;
+    min-width: 70px;
+  }
+
+  .slot-name {
+    font-size: 11px;
+  }
+
+  .slot-time {
+    font-size: 10px;
+  }
+
+  .period-cell {
+    height: 100px;
+    padding: 4px;
+  }
+
+  .class-slot {
+    padding: 4px;
+  }
+
+  .subject-title {
+    font-size: 11px;
+  }
+
+  .teacher-name {
+    font-size: 9px;
+  }
+
+  .todays-classes {
+    padding: 16px;
+  }
+
+  .todays-classes h2 {
+    font-size: 16px;
+  }
+
+  .classes-list {
+    padding: 16px;
+  }
+
+  .classes-list h2 {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .student-timetable-container {
+    padding: 12px;
+  }
+
+  .st-title {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .st-title h1 {
+    font-size: 18px;
+  }
+
+  .st-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .today-list {
+    grid-template-columns: 1fr;
+  }
+
+  .days-schedule {
+    grid-template-columns: 1fr;
+  }
+
+  .student-timetable th,
+  .period-cell {
+    padding: 4px;
+  }
+
+  .today-card {
+    flex-direction: column;
+  }
+
+  .class-item {
+    flex-direction: column;
+  }
+}

@@ -26,7 +26,27 @@ import {
   CreditCard,
   FileSpreadsheet,
   AlertCircle,
-  Download
+  Download,
+  UserCog,
+  User as UserIcon,
+  BookOpenCheck,
+  UserCircle,
+  Clock
+} from "lucide-react";
+import {
+  IndianRupee,
+  CalendarCheck,
+  Megaphone,
+  BarChart2,
+  Truck,
+  MapPin,
+  Fuel,
+  History,
+  Navigation,
+  AlertTriangle,
+  Wrench,
+  Phone,
+  ClipboardCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -73,6 +93,50 @@ const navItems: NavItem[] = [
     icon: ClipboardList, 
     href: "/exams", 
     roles: ["admin", "teacher", "parent", "student", "owner"] 
+  },
+  {
+    title: "Progress Reports",
+    icon: FileSpreadsheet,
+    href: "/progress-reports",
+    roles: ["admin", "teacher", "parent", "student"],
+    children: [
+      {
+        title: "Exam Setup",
+        icon: ClipboardList,
+        href: "/progress-reports/exam-setup",
+        roles: ["admin"]
+      },
+      {
+        title: "Marks Entry",
+        icon: FileText,
+        href: "/progress-reports/marks-entry",
+        roles: ["teacher"]
+      },
+      {
+        title: "Class Progress",
+        icon: BarChart3,
+        href: "/progress-reports/class-progress",
+        roles: ["teacher"]
+      },
+      {
+        title: "Report Card",
+        icon: Download,
+        href: "/progress-reports/report-card",
+        roles: ["admin", "parent", "student"]
+      },
+      {
+        title: "Publish Results",
+        icon: FileText,
+        href: "/progress-reports/publish-results",
+        roles: ["admin"]
+      },
+      {
+        title: "Analytics",
+        icon: Brain,
+        href: "/progress-reports/analytics",
+        roles: ["admin"]
+      },
+    ]
   },
   { 
     title: "AI Insights", 
@@ -175,6 +239,24 @@ const navItems: NavItem[] = [
     roles: ["admin", "teacher", "student"] 
   },
   { 
+    title: "Subjects", 
+    icon: BookOpenCheck, 
+    href: "/subjects", 
+    roles: ["admin", "owner"] 
+  },
+  { 
+    title: "Teacher Assignments", 
+    icon: UserCircle, 
+    href: "/teacher-assignments", 
+    roles: ["admin", "teacher", "owner"] 
+  },
+  { 
+    title: "Timetable", 
+    icon: Clock, 
+    href: "/timetable", 
+    roles: ["admin", "teacher", "student", "owner"] 
+  },
+  { 
     title: "Communication", 
     icon: MessageSquare, 
     href: "/communication", 
@@ -187,12 +269,72 @@ const navItems: NavItem[] = [
     roles: ["admin", "student"] 
   },
   { 
+    title: "User Management", 
+    icon: UserCog, 
+    href: "/user-management", 
+    roles: ["admin"] 
+  },
+  { 
     title: "Settings", 
     icon: Settings, 
     href: "/settings", 
     roles: ["admin", "owner"] 
   },
 ];
+
+// ===== CASHIER NAV ITEMS =====
+const cashierNavItems: NavItem[] = [
+  { title: "Dashboard", icon: LayoutDashboard, href: "/cashier/dashboard", roles: ["cashier"] },
+  { title: "Collect Fee", icon: IndianRupee, href: "/cashier/collect-fee", roles: ["cashier"] },
+  { title: "Receipts", icon: Receipt, href: "/cashier/receipts", roles: ["cashier"] },
+  { title: "Fee Defaulters", icon: AlertCircle, href: "/cashier/fee-defaulters", roles: ["cashier"] },
+  { title: "Transaction History", icon: FileText, href: "/cashier/statement", roles: ["cashier"] },
+  { title: "Payment History", icon: History, href: "/cashier/payment-history", roles: ["cashier"] },
+  { title: "Daily Collections", icon: BarChart3, href: "/cashier/collections", roles: ["cashier"] },
+  { title: "Daily Report", icon: FileText, href: "/cashier/daily-report", roles: ["cashier"] },
+  { title: "My Account", icon: UserIcon, href: "/cashier/my-account", roles: ["cashier"] },
+];
+
+// ===== PRINCIPAL NAV ITEMS =====
+const principalNavItems: NavItem[] = [
+  { title: "Dashboard", icon: LayoutDashboard, href: "/principal/dashboard", roles: ["principal"] },
+  { title: "Students", icon: GraduationCap, href: "/principal/students", roles: ["principal"] },
+  { title: "Teachers", icon: Users, href: "/principal/teachers", roles: ["principal"] },
+  { title: "Attendance", icon: CalendarCheck, href: "/principal/attendance", roles: ["principal"] },
+  { title: "Finance Overview", icon: IndianRupee, href: "/principal/finance", roles: ["principal"] },
+  { title: "Exams & Results", icon: BookOpen, href: "/principal/exams", roles: ["principal"] },
+  { title: "Transport", icon: Bus, href: "/principal/transport", roles: ["principal"] },
+  { title: "Announcements", icon: Megaphone, href: "/principal/announcements", roles: ["principal"] },
+  { title: "Reports", icon: BarChart2, href: "/principal/reports", roles: ["principal"] },
+  { title: "My Account", icon: UserIcon, href: "/my-account", roles: ["principal"] },
+];
+
+// ===== DRIVER NAV ITEMS =====
+const driverNavItems: NavItem[] = [
+  { title: "Dashboard", icon: LayoutDashboard, href: "/driver/dashboard", roles: ["driver"] },
+  { title: "Today's Schedule", icon: Clock, href: "/driver/my-schedule", roles: ["driver"] },
+  { title: "Student Attendance", icon: UserCheck, href: "/driver/student-attendance", roles: ["driver"], badge: "Important" },
+  { title: "Start / End Trip", icon: MapPin, href: "/driver/start-trip", roles: ["driver"] },
+  { title: "Route Map", icon: Navigation, href: "/driver/route-map", roles: ["driver"] },
+  { title: "My Students", icon: Users, href: "/driver/my-students", roles: ["driver"] },
+  { title: "Vehicle Checklist", icon: ClipboardCheck, href: "/driver/vehicle-checklist", roles: ["driver"] },
+  { title: "Trip History", icon: History, href: "/driver/trip-history", roles: ["driver"] },
+  { title: "My Vehicle", icon: Truck, href: "/driver/my-vehicle", roles: ["driver"] },
+  { title: "Fuel Log", icon: Fuel, href: "/driver/fuel-log", roles: ["driver"] },
+  { title: "Incident Report", icon: AlertTriangle, href: "/driver/incident-report", roles: ["driver"] },
+  { title: "Maintenance", icon: Wrench, href: "/driver/maintenance", roles: ["driver"] },
+  { title: "Emergency Contacts", icon: Phone, href: "/driver/emergency-contacts", roles: ["driver"] },
+  { title: "My Account", icon: UserIcon, href: "/my-account", roles: ["driver"] },
+];
+
+// Helper function to get the correct href based on user role
+const getNavigationHref = (item: NavItem, userRole: UserRole): string => {
+  // For Attendance, students should go to /student/attendance
+  if (item.title === "Attendance" && userRole === "student") {
+    return "/student/attendance";
+  }
+  return item.href;
+};
 
 export function AppSidebar() {
   const { user, logout } = useAuth();
@@ -211,14 +353,25 @@ export function AppSidebar() {
 
   // Auto-open menu if current path is within it
   const isMenuActive = (item: NavItem): boolean => {
+    const dynamicHref = getNavigationHref(item, user.role);
+    
     if (item.children) {
       return item.children.some(child => 
         location.pathname === child.href || 
         location.pathname.startsWith(child.href + '/')
       );
     }
-    return location.pathname === item.href || 
-           location.pathname.startsWith(item.href + '/');
+    
+    // Special handling for Attendance - check both /attendance and /student/attendance
+    if (item.title === "Attendance") {
+      return location.pathname === "/attendance" || 
+             location.pathname === "/student/attendance" ||
+             location.pathname.startsWith("/attendance/") ||
+             location.pathname.startsWith("/student/attendance/");
+    }
+    
+    return location.pathname === dynamicHref || 
+           location.pathname.startsWith(dynamicHref + '/');
   };
 
   // Initialize open menus based on current location
@@ -237,9 +390,15 @@ export function AppSidebar() {
     setOpenMenus(prev => ({ ...prev, ...newOpenMenus }));
   }, [location.pathname, user?.role]);
 
-  const filteredNavItems = navItems.filter(item =>
-    item.roles.includes(user.role)
-  );
+  // Use role-specific nav for new portals
+  const getRoleNavItems = (): NavItem[] => {
+    if (user.role === "cashier") return cashierNavItems;
+    if (user.role === "principal") return principalNavItems;
+    if (user.role === "driver") return driverNavItems;
+    return navItems.filter(item => item.roles.includes(user.role));
+  };
+
+  const activeNavItems = getRoleNavItems();
 
   const displayName = user.name || "Nagendra Babu";
   const initials = displayName
@@ -257,10 +416,11 @@ export function AppSidebar() {
     if (isCollapsed && (item.children || isChild)) {
       if (isChild) return null;
       
+      const href = getNavigationHref(item, user.role);
       return (
         <NavLink
           key={item.href}
-          to={item.href}
+          to={href}
           className={cn(
             "flex items-center justify-center rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 mb-1",
             isActive
@@ -336,10 +496,11 @@ export function AppSidebar() {
     }
 
     // Render regular nav item
+    const href = getNavigationHref(item, user.role);
     return (
       <NavLink
         key={item.href}
-        to={item.href}
+        to={href}
         className={cn(
           "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200",
           isActive
@@ -378,7 +539,7 @@ export function AppSidebar() {
 
         {!isCollapsed && (
           <div className="ml-3 flex-1">
-            <p className="text-sm font-black text-white tracking-tight">AI School ERP</p>
+            <p className="text-sm font-black text-white tracking-tight">PMC Tech School</p>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Smart Education</p>
           </div>
         )}
@@ -395,7 +556,7 @@ export function AppSidebar() {
 
       {/* ===== NAVIGATION ===== */}
       <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto custom-scrollbar">
-        {filteredNavItems.map(item => renderNavItem(item))}
+        {activeNavItems.map(item => renderNavItem(item))}
       </nav>
 
       {/* ===== USER FOOTER ===== */}
@@ -422,11 +583,28 @@ export function AppSidebar() {
           )}
         </div>
 
+        {!isCollapsed && (
+          <>
+            <NavLink
+              to="/my-account"
+              className={({ isActive }) => cn(
+                "mt-4 flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-bold transition-colors",
+                isActive
+                  ? "bg-blue-500/20 text-blue-400"
+                  : "text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
+              )}
+            >
+              <UserIcon className="h-4 w-4" />
+              My Account
+            </NavLink>
+          </>
+        )}
+
         <Button
           onClick={logout}
           variant="ghost"
           className={cn(
-            "mt-6 w-full flex items-center gap-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl font-bold transition-colors",
+            "mt-2 w-full flex items-center gap-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl font-bold transition-colors",
             isCollapsed ? "justify-center" : "justify-start px-3"
           )}
         >

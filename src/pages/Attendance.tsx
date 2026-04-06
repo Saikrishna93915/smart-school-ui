@@ -3,6 +3,8 @@ import { StudentsService } from '../Services/students.service';
 import { attendanceApi } from '../Services/attendanceApi'; 
 import { Student } from '../types/student';
 import { format, isSunday, parseISO } from 'date-fns';
+import apiClient from '../Services/apiClient';
+import jsPDF from 'jspdf';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,8 +30,9 @@ import {
     Search, Save, MoreVertical, Edit2, Lock, 
     RotateCcw, Eye, AlertCircle, CheckCircle2, 
     XCircle, ChevronLeft, ChevronRight, Filter,
-    CalendarDays, BarChart3, Download, Upload,
-    Shield, RefreshCw, Bell, TrendingUp, Target
+    CalendarDays, Download,
+    RefreshCw, Bell, TrendingUp,
+    Printer, FileText, FileDown, Info
 } from 'lucide-react';
 import {
     Dialog,
@@ -42,12 +45,10 @@ import {
 import { StatCard } from '@/components/dashboard/StatCard';
 import { useToast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 // --- CONFIG ---
 const CLASS_LEVELS = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
@@ -98,6 +99,13 @@ export default function Attendance() {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeSession, setActiveSession] = useState<AttendanceSession>('full-day');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    
+    // Export Date Range States
+    const [exportDialogOpen, setExportDialogOpen] = useState(false);
+    const [exportType, setExportType] = useState<'csv' | 'pdf' | 'print'>('csv');
+    const [dateRangeType, setDateRangeType] = useState<'single' | 'week' | 'month' | 'custom' | '6months' | 'year'>('single');
+    const [customStartDate, setCustomStartDate] = useState<string>(todayStr);
+    const [customEndDate, setCustomEndDate] = useState<string>(todayStr);
     
     // Attendance States
     const [isHoliday, setIsHoliday] = useState(false);
@@ -231,6 +239,8 @@ export default function Attendance() {
                     const record = attendanceMap[student._id];
                     
                     const parseAttendance = (value: any) => {
+                        if (value === "present") return true;
+                        if (value === "absent") return false;
                         if (value === "true" || value === true) return true;
                         if (value === "false" || value === false) return false;
                         return null;
@@ -275,8 +285,8 @@ export default function Attendance() {
     // Calculate attendance score
     const calculateAttendanceScore = (morning: any, afternoon: any) => {
         let score = 0;
-        if (morning === true) score += 50;
-        if (afternoon === true) score += 50;
+        if (morning === true || morning === 'present') score += 50;
+        if (afternoon === true || afternoon === 'present') score += 50;
         return score;
     };
 
@@ -319,9 +329,32 @@ export default function Attendance() {
             const afternoon = student.attendance.afternoon;
 
             if (activeSession === 'full-day') {
-                if (morning === true && afternoon === true) present++;
-                else if (morning === false && afternoon === false) absent++;
-                else if (morning === null || afternoon === null) pending++;
+                // Count as present if AT LEAST ONE session is marked present
+                const morningPresent = morning === true;
+                const afternoonPresent = afternoon === true;
+                const morningAbsent = morning === false;
+                const afternoonAbsent = afternoon === false;
+                
+                // If both sessions are marked and both are present, count as present
+                if (morningPresent && afternoonPresent) {
+                    present++;
+                }
+                // If only one session is marked as present, count as present
+                else if ((morningPresent && afternoon === null) || (morning === null && afternoonPresent)) {
+                    present++;
+                }
+                // If both sessions are marked and both are absent, count as absent
+                else if (morningAbsent && afternoonAbsent) {
+                    absent++;
+                }
+                // If only one session is marked as absent, count as absent
+                else if ((morningAbsent && afternoon === null) || (morning === null && afternoonAbsent)) {
+                    absent++;
+                }
+                // Otherwise count as pending (both null or mixed marked/unmarked)
+                else {
+                    pending++;
+                }
             } else if (activeSession === 'morning') {
                 if (morning === true) present++;
                 else if (morning === false) absent++;
@@ -333,9 +366,9 @@ export default function Attendance() {
             }
         });
 
-        const presentPercentage = Math.round((present / total) * 100);
-        const absentPercentage = Math.round((absent / total) * 100);
-        const attendanceRate = Math.round(((present + late) / total) * 100);
+        const presentPercentage = total > 0 ? Math.round((present / total) * 100) : 0;
+        const absentPercentage = total > 0 ? Math.round((absent / total) * 100) : 0;
+        const attendanceRate = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
 
         return {
             total,
@@ -509,15 +542,17 @@ export default function Attendance() {
                 section: selectedSection === 'all' ? '' : selectedSection,
                 attendance: studentsToSave.map(student => ({
                     studentId: student._id,
+                    className: student.class.className,
+                    section: student.class.section,
                     ...(activeSession === 'full-day' && {
-                        morning: String(student.attendance.morning),
-                        afternoon: String(student.attendance.afternoon)
+                        morning: student.attendance.morning === true ? 'present' : 'absent',
+                        afternoon: student.attendance.afternoon === true ? 'present' : 'absent'
                     }),
                     ...(activeSession === 'morning' && {
-                        morning: String(student.attendance.morning)
+                        morning: student.attendance.morning === true ? 'present' : 'absent'
                     }),
                     ...(activeSession === 'afternoon' && {
-                        afternoon: String(student.attendance.afternoon)
+                        afternoon: student.attendance.afternoon === true ? 'present' : 'absent'
                     })
                 }))
             };
@@ -541,32 +576,723 @@ export default function Attendance() {
         }
     };
 
-    const exportAttendance = async () => {
-        try {
-            const data = displayedStudents.map(student => ({
-                'Student ID': student.admissionNumber,
-                'Name': `${student.student.firstName} ${student.student.lastName}`,
-                'Class': student.class.className,
-                'Section': student.class.section,
-                'Morning': student.attendance.morning === null ? 'Pending' : student.attendance.morning ? 'Present' : 'Absent',
-                'Afternoon': student.attendance.afternoon === null ? 'Pending' : student.attendance.afternoon ? 'Present' : 'Absent',
-                'Attendance Score': student.attendanceScore || '0%'
-            }));
+    const calculateStats = () => {
+        const total = filteredStudents.length;
+        if (total === 0) {
+            return { total: 0, present: 0, absent: 0, pending: 0, attendanceRate: 0 };
+        }
 
-            // In a real app, you would use a library like xlsx or csv-writer
-            console.log("Export data:", data);
+        let present = 0, absent = 0, pending = 0;
+
+        filteredStudents.forEach(student => {
+            const morning = student.attendance.morning;
+            const afternoon = student.attendance.afternoon;
+
+            if (activeSession === 'full-day') {
+                const morningPresent = morning === true;
+                const afternoonPresent = afternoon === true;
+                const morningAbsent = morning === false;
+                const afternoonAbsent = afternoon === false;
+                
+                if (morningPresent && afternoonPresent) {
+                    present++;
+                } else if ((morningPresent && afternoon === null) || (morning === null && afternoonPresent)) {
+                    present++;
+                } else if (morningAbsent && afternoonAbsent) {
+                    absent++;
+                } else if ((morningAbsent && afternoon === null) || (morning === null && afternoonAbsent)) {
+                    absent++;
+                } else {
+                    pending++;
+                }
+            } else if (activeSession === 'morning') {
+                if (morning === true) present++;
+                else if (morning === false) absent++;
+                else pending++;
+            } else if (activeSession === 'afternoon') {
+                if (afternoon === true) present++;
+                else if (afternoon === false) absent++;
+                else pending++;
+            }
+        });
+
+        const attendanceRate = total > 0 ? Math.round((present / total) * 100) : 0;
+
+        return { total, present, absent, pending, attendanceRate };
+    };
+
+    const getDateRange = (): { startDate: string; endDate: string } => {
+        const today = parseISO(todayStr);
+        let startDate = '';
+        let endDate = todayStr;
+
+        switch (dateRangeType) {
+            case 'single':
+                startDate = selectedDate;
+                endDate = selectedDate;
+                break;
+            case 'week':
+                const weekAgo = new Date(today);
+                weekAgo.setDate(today.getDate() - 6);
+                startDate = format(weekAgo, 'yyyy-MM-dd');
+                break;
+            case 'month':
+                const monthAgo = new Date(today);
+                monthAgo.setDate(today.getDate() - 29);
+                startDate = format(monthAgo, 'yyyy-MM-dd');
+                break;
+            case '6months':
+                const sixMonthsAgo = new Date(today);
+                sixMonthsAgo.setMonth(today.getMonth() - 6);
+                startDate = format(sixMonthsAgo, 'yyyy-MM-dd');
+                break;
+            case 'year':
+                const yearAgo = new Date(today);
+                yearAgo.setFullYear(today.getFullYear() - 1);
+                startDate = format(yearAgo, 'yyyy-MM-dd');
+                break;
+            case 'custom':
+                startDate = customStartDate;
+                endDate = customEndDate;
+                break;
+            default:
+                startDate = selectedDate;
+                endDate = selectedDate;
+        }
+
+        return { startDate, endDate };
+    };
+
+    const fetchAttendanceForDateRange = async (startDate: string, endDate: string) => {
+        try {
+            // Call the new professional report API - single call, all aggregation done on backend
+            const response = await apiClient.get(`/admin/attendance/report`, {
+                params: {
+                    class: selectedClass === 'all' ? 'LKG' : selectedClass, // Default to first class if 'all' to get data
+                    section: selectedSection === 'all' ? 'A' : selectedSection,
+                    reportType: dateRangeType === 'single' ? 'day' : dateRangeType === 'week' ? 'week' : dateRangeType === 'month' ? 'month' : 'year',
+                    startDate: startDate,
+                    endDate: endDate
+                }
+            });
+
+            if (response.data.success) {
+                return response.data.data;
+            }
+
+            return null;
+        } catch (error) {
+            console.error('Error fetching attendance report:', error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Could not fetch attendance data. Please try again.",
+            });
+            return null;
+        }
+    };
+
+    const handleExportWithDateRange = async () => {
+        try {
+            const { startDate, endDate } = getDateRange();
+            
+            console.log('📊 Starting export:', { dateRangeType, exportType, startDate, endDate, selectedClass, selectedSection });
             
             toast({
-                title: "Export Ready",
-                description: "Attendance data prepared for export",
+                title: "Preparing Export",
+                description: "Generating attendance report...",
             });
+
+            const reportData = await fetchAttendanceForDateRange(startDate, endDate);
+
+            if (!reportData) {
+                console.error('No report data returned');
+                toast({
+                    variant: "destructive",
+                    title: "Failed",
+                    description: "Could not generate report. Please try again.",
+                });
+                return;
+            }
+
+            console.log('✅ Report data received:', reportData);
+            setExportDialogOpen(false);
+
+            // Call appropriate export function based on format and report type
+            if (exportType === 'csv') {
+                console.log('📄 Exporting to CSV...');
+                exportReportToCSV(reportData);
+            } else if (exportType === 'pdf') {
+                console.log('🖨️ Exporting to PDF...');
+                await exportReportToPDF(reportData);
+            } else if (exportType === 'print') {
+                console.log('🖨️ Opening print preview...');
+                exportReportToPrint(reportData);
+            }
+
+            toast({
+                title: "Export Ready",
+                description: `${dateRangeType} report generated successfully`,
+            });
+
         } catch (error) {
+            console.error('Export error:', error);
             toast({
                 variant: "destructive",
                 title: "Export Failed",
-                description: "Could not export attendance data",
+                description: "Could not export attendance data: " + (error as any).message,
             });
         }
+    };
+
+    const exportReportToCSV = (reportData: any) => {
+        try {
+            console.log('📥 CSV Export - Input data:', reportData);
+            
+            let csvContent = '';
+            const { startDate, endDate } = getDateRange();
+            
+            // Header comment
+            csvContent += `Attendance Report\n`;
+            csvContent += `Type: ${dateRangeType.toUpperCase()}\n`;
+            csvContent += `Date Range: ${startDate} to ${endDate}\n`;
+            csvContent += `Class: ${selectedClass}\n`;
+            csvContent += `Generated: ${format(new Date(), 'MMM dd, yyyy HH:mm a')}\n\n`;
+
+            // Different CSV format based on report type
+            if (dateRangeType === 'single' || dateRangeType === 'week') {
+                // Detailed format with student rows
+                csvContent += `ID,Name,Class,Section,Morning,Afternoon,Status,Percentage\n`;
+                
+                const students = reportData.students || [];
+                console.log('Students array length:', students.length);
+                
+                students.forEach((student: any) => {
+                    csvContent += `"${student.id}","${student.name}","${student.class || ''}","${student.section || ''}","${student.morning || '--'}","${student.afternoon || '--'}","${student.fullDay || student.percentage}"\n`;
+                });
+            } else if (dateRangeType === 'month') {
+                // Summary format
+                csvContent += `ID,Name,Present,Absent,Leave,Attendance Rate\n`;
+                
+                const students = reportData.students || [];
+                console.log('Students array length:', students.length);
+                
+                students.forEach((student: any) => {
+                    csvContent += `"${student.id}","${student.name}","${student.present || 0}","${student.absent || 0}","${student.leave || 0}","${student.rate || 0}%"\n`;
+                });
+            } else if (dateRangeType === 'year') {
+                // Yearly summary
+                csvContent += `ID,Name,Total Days,Total Present,Total Absent,Total Leave,Annual Rate\n`;
+                
+                const students = reportData.studentSummary || [];
+                console.log('Student summary array length:', students.length);
+                
+                students.forEach((student: any) => {
+                    csvContent += `"${student.id}","${student.name}","${student.totalDays || 0}","${student.totalPresent || 0}","${student.totalAbsent || 0}","${student.totalLeave || 0}","${student.rate || 0}%"\n`;
+                });
+            }
+
+            console.log('📊 CSV Content Length:', csvContent.length);
+            console.log('📊 CSV Preview (first 500 chars):',  csvContent.substring(0, 500));
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `attendance_${dateRangeType}_${startDate}_to_${endDate}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            console.log('✅ CSV file downloaded');
+
+        } catch (error) {
+            console.error('CSV export error:', error);
+            toast({
+                variant: "destructive",
+                title: "CSV Export Failed",
+                description: "Could not create CSV file: " + (error as any).message,
+            });
+        }
+    };
+
+    const generateReportHTML = (reportData: any) => {
+        if (dateRangeType === 'single') return generateDayReportHTML(reportData);
+        if (dateRangeType === 'week') return generateWeekReportHTML(reportData);
+        if (dateRangeType === 'month') return generateMonthReportHTML(reportData);
+
+        // Custom, 6-month and yearly views use aggregated/year-style structure.
+        return generateYearReportHTML(reportData);
+    };
+
+    const exportReportToPDF = async (reportData: any) => {
+        try {
+            console.log('Starting PDF export with reportData:', reportData);
+
+            const htmlContent = generateReportHTML(reportData);
+
+            console.log('Generated HTML length:', htmlContent.length);
+
+            if (!htmlContent || htmlContent.trim().length === 0) {
+                throw new Error('No printable content generated for the selected date range.');
+            }
+
+            const tempContainer = document.createElement('div');
+            tempContainer.style.position = 'fixed';
+            tempContainer.style.left = '-99999px';
+            tempContainer.style.top = '0';
+            tempContainer.style.width = '1000px';
+            tempContainer.innerHTML = htmlContent;
+            document.body.appendChild(tempContainer);
+
+            const pdf = new jsPDF({
+                orientation: 'p',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            await pdf.html(tempContainer, {
+                margin: [8, 8, 8, 8],
+                autoPaging: 'text',
+                html2canvas: {
+                    scale: 0.5,
+                    useCORS: true,
+                    allowTaint: true
+                }
+            });
+
+            const { startDate, endDate } = getDateRange();
+            pdf.save(`attendance_${dateRangeType}_${startDate}_to_${endDate}.pdf`);
+            document.body.removeChild(tempContainer);
+
+            toast({
+                title: 'PDF Downloaded',
+                description: 'Attendance report has been downloaded as PDF.'
+            });
+
+        } catch (error) {
+            console.error('PDF export error:', error);
+            toast({
+                variant: 'destructive',
+                title: 'PDF Export Failed',
+                description: 'Could not generate PDF: ' + (error as any).message,
+            });
+        }
+    };
+
+    const exportReportToPrint = (reportData: any) => {
+        try {
+            const htmlContent = generateReportHTML(reportData);
+
+            if (!htmlContent || htmlContent.trim().length === 0) {
+                throw new Error('No printable content generated for the selected date range.');
+            }
+
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const printWindow = window.open(url, '_blank', 'width=1200,height=800');
+            
+            if (!printWindow) {
+                toast({
+                    variant: "destructive",
+                    title: "Export Failed",
+                    description: "Please allow popups to export PDF/Print",
+                });
+                return;
+            }
+
+            // Wait for window to load before printing
+            setTimeout(() => {
+                try {
+                    printWindow.focus();
+                    printWindow.print();
+                    console.log('Print dialog opened');
+                } catch (printError) {
+                    console.error('Print error:', printError);
+                }
+            }, 500);
+
+        } catch (error) {
+            console.error('Print export error:', error);
+            toast({
+                variant: "destructive",
+                title: "Print Failed",
+                description: "Could not prepare print preview: " + (error as any).message,
+            });
+        }
+    };
+
+    const generateDayReportHTML = (reportData: any) => {
+        const { startDate } = getDateRange();
+        const stats = reportData.stats || {};
+        const students = reportData.students || [];
+
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Daily Attendance Report</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; }
+                    .header h1 { margin: 0; color: #2563eb; font-size: 24px; }
+                    .header p { margin: 5px 0; color: #666; }
+                    .stats { display: flex; gap: 30px; margin: 20px 0; padding: 15px; background: #f3f4f6; border-radius: 8px; }
+                    .stat { flex: 1; text-align: center; }
+                    .stat-label { font-size: 12px; color: #666; font-weight: bold; }
+                    .stat-value { font-size: 28px; font-weight: bold; color: #1f2937; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th { background: #2563eb; color: white; padding: 10px; text-align: left; font-size: 13px; }
+                    td { padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 12px; }
+                    tr:nth-child(even) { background: #f9fafb; }
+                    .present { color: #10b981; font-weight: bold; }
+                    .absent { color: #ef4444; font-weight: bold; }
+                    .partial { color: #f59e0b; font-weight: bold; }
+                    .footer { margin-top: 30px; text-align: center; color: #999; font-size: 11px; }
+                    @media print { body { padding: 0; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>Daily Attendance Report</h1>
+                    <p><strong>Date:</strong> ${format(parseISO(startDate), 'EEEE, MMMM dd, yyyy')}</p>
+                    <p><strong>Class:</strong> ${selectedClass} | <strong>Section:</strong> ${selectedSection}</p>
+                </div>
+
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-label">Total Students</div>
+                        <div class="stat-value">${stats.total || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Present</div>
+                        <div class="stat-value" style="color: #10b981;">${stats.present || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Absent</div>
+                        <div class="stat-value" style="color: #ef4444;">${stats.absent || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Pending</div>
+                        <div class="stat-value" style="color: #f59e0b;">${stats.pending || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Attendance Rate</div>
+                        <div class="stat-value" style="color: #2563eb;">${stats.rate || 0}%</div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Class</th>
+                            <th>Section</th>
+                            <th>Morning</th>
+                            <th>Afternoon</th>
+                            <th>Full Day Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${students.map((s: any) => {
+                            const statusClass = s.fullDay === 'Present' ? 'present' : s.fullDay === 'Absent' ? 'absent' : 'partial';
+                            return `
+                                <tr>
+                                    <td>${s.id}</td>
+                                    <td>${s.name}</td>
+                                    <td>${s.class}</td>
+                                    <td>${s.section}</td>
+                                    <td>${s.morning}</td>
+                                    <td>${s.afternoon}</td>
+                                    <td class="${statusClass}">${s.fullDay}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+
+                <div class="footer">
+                    <p>Generated on ${format(new Date(), 'MMMM dd, yyyy HH:mm a')} | School ERP Management System</p>
+                </div>
+            </body>
+            </html>
+        `;
+    };
+
+    const generateWeekReportHTML = (reportData: any) => {
+        const { startDate, endDate } = getDateRange();
+        const stats = reportData.stats || {};
+        const students = reportData.students || [];
+        const dayHeaders = reportData.dayHeaders || [];
+
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Weekly Attendance Report</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; }
+                    .header h1 { margin: 0; color: #2563eb; font-size: 24px; }
+                    .header p { margin: 5px 0; color: #666; }
+                    .stats { display: flex; gap: 30px; margin: 20px 0; padding: 15px; background: #f3f4f6; border-radius: 8px; }
+                    .stat { flex: 1; text-align: center; }
+                    .stat-label { font-size: 12px; color: #666; font-weight: bold; }
+                    .stat-value { font-size: 28px; font-weight: bold; color: #1f2937; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+                    th { background: #2563eb; color: white; padding: 8px; text-align: center; }
+                    td { padding: 8px; border: 1px solid #e5e7eb; text-align: center; }
+                    .name-col { text-align: left; background: #f9fafb; }
+                    .day-cell { width: 40px; }
+                    .footer { margin-top: 30px; text-align: center; color: #999; font-size: 11px; }
+                    @media print { body { padding: 0; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>Weekly Attendance Report</h1>
+                    <p><strong>Week:</strong> ${startDate} to ${endDate}</p>
+                    <p><strong>Working Days:</strong> ${reportData.totalWorkingDays || 0} days</p>
+                </div>
+
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-label">Total Students</div>
+                        <div class="stat-value">${reportData.totalRecords || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Overall Attendance</div>
+                        <div class="stat-value" style="color: #10b981;">${stats.rate || 0}%</div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            ${dayHeaders.map((day: string) => `<th class="day-cell">${day}</th>`).join('')}
+                            <th style="width: 50px;">%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${students.map((s: any) => {
+                            const dayValues = Object.values(s.days as Record<string, string>).map((d: any) => `<td class="day-cell">${d}</td>`).join('');
+                            return `
+                                <tr>
+                                    <td class="name-col">${s.name}</td>
+                                    ${dayValues}
+                                    <td style="font-weight: bold; color: #2563eb;">${s.percentage}%</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+
+                <div class="footer">
+                    <p>P = Present | A = Absent | L = Leave/Partial | - = Pending</p>
+                    <p>Generated on ${format(new Date(), 'MMMM dd, yyyy HH:mm a')} | School ERP Management System</p>
+                </div>
+            </body>
+            </html>
+        `;
+    };
+
+    const generateMonthReportHTML = (reportData: any) => {
+        const { startDate, endDate } = getDateRange();
+        const stats = reportData.stats || {};
+        const students = reportData.students || [];
+
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Monthly Attendance Report</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; }
+                    .header h1 { margin: 0; color: #2563eb; font-size: 24px; }
+                    .header p { margin: 5px 0; color: #666; }
+                    .stats { display: flex; gap: 30px; margin: 20px 0; padding: 15px; background: #f3f4f6; border-radius: 8px; }
+                    .stat { flex: 1; text-align: center; }
+                    .stat-label { font-size: 12px; color: #666; font-weight: bold; }
+                    .stat-value { font-size: 28px; font-weight: bold; color: #1f2937; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+                    th { background: #2563eb; color: white; padding: 10px; text-align: left; }
+                    td { padding: 10px; border-bottom: 1px solid #e5e7eb; }
+                    tr:nth-child(even) { background: #f9fafb; }
+                    .footer { margin-top: 30px; text-align: center; color: #999; font-size: 11px; }
+                    @media print { body { padding: 0; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>Monthly Attendance Report</h1>
+                    <p><strong>Month:</strong> ${startDate} to ${endDate}</p>
+                    <p><strong>Working Days:</strong> ${stats.workingDays || 0} days</p>
+                </div>
+
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-label">Total Students</div>
+                        <div class="stat-value">${reportData.totalRecords || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Total Present</div>
+                        <div class="stat-value" style="color: #10b981;">${stats.totalPresent || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Total Absent</div>
+                        <div class="stat-value" style="color: #ef4444;">${stats.totalAbsent || 0}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Overall %</div>
+                        <div class="stat-value" style="color: #2563eb;">${stats.overallRate || 0}%</div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Present</th>
+                            <th>Absent</th>
+                            <th>Leave</th>
+                            <th>Attendance %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${students.map((s: any) => `
+                            <tr>
+                                <td>${s.id}</td>
+                                <td>${s.name}</td>
+                                <td style="color: #10b981; font-weight: bold;">${s.present}</td>
+                                <td style="color: #ef4444; font-weight: bold;">${s.absent}</td>
+                                <td style="color: #f59e0b; font-weight: bold;">${s.leave}</td>
+                                <td style="color: #2563eb; font-weight: bold;">${s.rate}%</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div class="footer">
+                    <p>Generated on ${format(new Date(), 'MMMM dd, yyyy HH:mm a')} | School ERP Management System</p>
+                </div>
+            </body>
+            </html>
+        `;
+    };
+
+    const generateYearReportHTML = (reportData: any) => {
+        const { startDate, endDate } = getDateRange();
+        const stats = reportData.stats || {};
+        const monthSummary = reportData.monthSummary || [];
+        const studentSummary = reportData.studentSummary || [];
+
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Yearly Attendance Report</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; }
+                    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; }
+                    .header h1 { margin: 0; color: #2563eb; font-size: 24px; }
+                    .header p { margin: 5px 0; color: #666; }
+                    .section-title { font-size: 16px; font-weight: bold; color: #2563eb; margin-top: 30px; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                    th { background: #2563eb; color: white; padding: 10px; text-align: left; }
+                    td { padding: 10px; border-bottom: 1px solid #e5e7eb; }
+                    tr:nth-child(even) { background: #f9fafb; }
+                    .footer { margin-top: 30px; text-align: center; color: #999; font-size: 11px; }
+                    @media print { body { padding: 0; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>Yearly Attendance Report</h1>
+                    <p><strong>Period:</strong> ${startDate} to ${endDate}</p>
+                    <p><strong>Total Working Days:</strong> ${stats.totalWorkingDays || 0}</p>
+                </div>
+
+                <div class="section-title">📅 Monthly Summary</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Working Days</th>
+                            <th>Present</th>
+                            <th>Absent</th>
+                            <th>Leave</th>
+                            <th>Attendance %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${monthSummary.map((m: any) => `
+                            <tr>
+                                <td>${m.month}</td>
+                                <td>${m.workingDays}</td>
+                                <td style="color: #10b981; font-weight: bold;">${m.present}</td>
+                                <td style="color: #ef4444; font-weight: bold;">${m.absent}</td>
+                                <td style="color: #f59e0b; font-weight: bold;">${m.leave}</td>
+                                <td style="color: #2563eb; font-weight: bold;">${m.rate}%</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div class="section-title">👨‍🎓 Student-wise Yearly Summary</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Total Days</th>
+                            <th>Present</th>
+                            <th>Absent</th>
+                            <th>Leave</th>
+                            <th>Annual Attendance %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${studentSummary.slice(0, 30).map((s: any) => `
+                            <tr>
+                                <td>${s.id}</td>
+                                <td>${s.name}</td>
+                                <td>${s.totalDays}</td>
+                                <td style="color: #10b981; font-weight: bold;">${s.totalPresent}</td>
+                                <td style="color: #ef4444; font-weight: bold;">${s.totalAbsent}</td>
+                                <td style="color: #f59e0b; font-weight: bold;">${s.totalLeave}</td>
+                                <td style="color: #2563eb; font-weight: bold;">${s.rate}%</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                ${studentSummary.length > 30 ? `<p style="color: #999; margin-top: 10px;">... and ${studentSummary.length - 30} more students</p>` : ''}
+
+                <div class="footer">
+                    <p>Generated on ${format(new Date(), 'MMMM dd, yyyy HH:mm a')} | School ERP Management System</p>
+                </div>
+            </body>
+            </html>
+        `;
+    };
+
+    const handlePrintAttendance = () => {
+        setExportType('print');
+        setExportDialogOpen(true);
+    };
+
+    const exportToCSV = () => {
+        setExportType('csv');
+        setExportDialogOpen(true);
+    };
+
+    const exportToPDF = () => {
+        setExportType('pdf');
+        setExportDialogOpen(true);
     };
 
     // Filter students based on search and filters
@@ -583,38 +1309,39 @@ export default function Attendance() {
             const anyFilterActive = Object.values(statusFilters).some(v => v);
             if (!anyFilterActive) return true;
 
-            const morningStatus = student.attendance.morning;
-            const afternoonStatus = student.attendance.afternoon;
+            const morning = student.attendance.morning;
+            const afternoon = student.attendance.afternoon;
             let statusMatch = false;
 
-            if (statusFilters.present) {
-                if (activeSession === 'full-day') {
-                    statusMatch = morningStatus === true && afternoonStatus === true;
-                } else if (activeSession === 'morning') {
-                    statusMatch = morningStatus === true;
-                } else {
-                    statusMatch = afternoonStatus === true;
+            if (activeSession === 'full-day') {
+                // Determine student's actual full-day status
+                const morningPresent = morning === true;
+                const afternoonPresent = afternoon === true;
+                const morningAbsent = morning === false;
+                const afternoonAbsent = afternoon === false;
+                
+                let studentStatus = 'pending';
+                if ((morningPresent && afternoonPresent) || 
+                    (morningPresent && afternoon === null) || 
+                    (morning === null && afternoonPresent)) {
+                    studentStatus = 'present';
+                } else if ((morningAbsent && afternoonAbsent) || 
+                           (morningAbsent && afternoon === null) || 
+                           (morning === null && afternoonAbsent)) {
+                    studentStatus = 'absent';
                 }
-            }
-
-            if (statusFilters.absent) {
-                if (activeSession === 'full-day') {
-                    statusMatch = statusMatch || (morningStatus === false && afternoonStatus === false);
-                } else if (activeSession === 'morning') {
-                    statusMatch = statusMatch || morningStatus === false;
-                } else {
-                    statusMatch = statusMatch || afternoonStatus === false;
-                }
-            }
-
-            if (statusFilters.pending) {
-                if (activeSession === 'full-day') {
-                    statusMatch = statusMatch || morningStatus === null || afternoonStatus === null;
-                } else if (activeSession === 'morning') {
-                    statusMatch = statusMatch || morningStatus === null;
-                } else {
-                    statusMatch = statusMatch || afternoonStatus === null;
-                }
+                
+                if (statusFilters.present && studentStatus === 'present') statusMatch = true;
+                if (statusFilters.absent && studentStatus === 'absent') statusMatch = true;
+                if (statusFilters.pending && studentStatus === 'pending') statusMatch = true;
+            } else if (activeSession === 'morning') {
+                if (statusFilters.present && morning === true) statusMatch = true;
+                if (statusFilters.absent && morning === false) statusMatch = true;
+                if (statusFilters.pending && morning === null) statusMatch = true;
+            } else if (activeSession === 'afternoon') {
+                if (statusFilters.present && afternoon === true) statusMatch = true;
+                if (statusFilters.absent && afternoon === false) statusMatch = true;
+                if (statusFilters.pending && afternoon === null) statusMatch = true;
             }
 
             return statusMatch;
@@ -664,14 +1391,31 @@ export default function Attendance() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                    <Button
-                        variant="outline"
-                        onClick={exportAttendance}
-                        className="border-blue-200 text-blue-600 hover:bg-blue-50"
-                    >
-                        <Download className="h-4 w-4 mr-2" />
-                        Export
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="outline"
+                                className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                            >
+                                <Download className="h-4 w-4 mr-2" />
+                                Export
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => { setExportType('print'); setExportDialogOpen(true); }}>
+                                <Printer className="h-4 w-4 mr-2" />
+                                Print Attendance
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportType('csv'); setExportDialogOpen(true); }}>
+                                <FileText className="h-4 w-4 mr-2" />
+                                Export as CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setExportType('pdf'); setExportDialogOpen(true); }}>
+                                <FileDown className="h-4 w-4 mr-2" />
+                                Export as PDF
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     
                     {!isHoliday && (
                         <Button
@@ -1435,6 +2179,120 @@ export default function Attendance() {
                             className="bg-gradient-to-r from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700"
                         >
                             Confirm Holiday
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Export Date Range Dialog */}
+            <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Export Attendance Data</DialogTitle>
+                        <DialogDescription>
+                            Select the date range for exporting attendance records
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-6 py-4">
+                        <div className="space-y-4">
+                            <Label>Date Range</Label>
+                            <RadioGroup value={dateRangeType} onValueChange={(value: any) => setDateRangeType(value)}>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="single" id="single" />
+                                    <Label htmlFor="single" className="font-normal cursor-pointer">
+                                        Current Date ({format(parseISO(selectedDate), 'MMM dd, yyyy')})
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="week" id="week" />
+                                    <Label htmlFor="week" className="font-normal cursor-pointer">
+                                        This Week (Last 7 days)
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="month" id="month" />
+                                    <Label htmlFor="month" className="font-normal cursor-pointer">
+                                        This Month (Last 30 days)
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="6months" id="6months" />
+                                    <Label htmlFor="6months" className="font-normal cursor-pointer">
+                                        Last 6 Months
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="year" id="year" />
+                                    <Label htmlFor="year" className="font-normal cursor-pointer">
+                                        This Year (Last 365 days)
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="custom" id="custom" />
+                                    <Label htmlFor="custom" className="font-normal cursor-pointer">
+                                        Custom Date Range
+                                    </Label>
+                                </div>
+                            </RadioGroup>
+                        </div>
+
+                        {dateRangeType === 'custom' && (
+                            <div className="space-y-4 pl-6">
+                                <div className="space-y-2">
+                                    <Label htmlFor="start-date">Start Date</Label>
+                                    <Input
+                                        id="start-date"
+                                        type="date"
+                                        value={customStartDate}
+                                        onChange={(e) => setCustomStartDate(e.target.value)}
+                                        max={todayStr}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="end-date">End Date</Label>
+                                    <Input
+                                        id="end-date"
+                                        type="date"
+                                        value={customEndDate}
+                                        onChange={(e) => setCustomEndDate(e.target.value)}
+                                        min={customStartDate}
+                                        max={todayStr}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+                            <div className="flex items-start gap-3">
+                                <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-medium text-blue-800">
+                                        Export Information
+                                    </p>
+                                    <p className="text-sm text-blue-700 mt-1">
+                                        {exportType === 'csv' && 'Attendance data will be exported as a CSV file with detailed records for each date.'}
+                                        {exportType === 'pdf' && 'Attendance data will be formatted for PDF printing with summary statistics.'}
+                                        {exportType === 'print' && 'Attendance data will be formatted for direct printing.'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setExportDialogOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleExportWithDateRange}
+                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                        >
+                            <Download className="h-4 w-4 mr-2" />
+                            Export
                         </Button>
                     </DialogFooter>
                 </DialogContent>

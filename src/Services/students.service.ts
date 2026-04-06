@@ -7,7 +7,15 @@ export const StudentsService = {
   // GET /admin/students
   async getAll(): Promise<Student[]> {
     const res = await apiClient.get(BASE_ENDPOINT);
-    return res.data;
+    const payload = res.data as any;
+
+    // Support array and common API wrapper shapes.
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.students)) return payload.students;
+    if (Array.isArray(payload?.result)) return payload.result;
+
+    return [];
   },
 
   // GET /admin/students/:id
@@ -19,7 +27,8 @@ export const StudentsService = {
   // POST /admin/students
   async create(payload: StudentCreatePayload): Promise<Student> {
     const res = await apiClient.post(BASE_ENDPOINT, payload);
-    return res.data;
+    // Backend returns { success: true, message: "...", student: {...} }
+    return res.data.student || res.data;
   },
 
   // PUT /admin/students/:id

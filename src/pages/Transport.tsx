@@ -80,6 +80,7 @@ import {
   Search,
   Edit,
   Trash2,
+  Pencil,
   Star,
   Phone,
   Mail,
@@ -240,6 +241,12 @@ const Transport = () => {
   });
   const [activeTab, setActiveTab] = useState('overview');
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
+  const [isAddDriverOpen, setIsAddDriverOpen] = useState(false);
+  const [isAddRouteOpen, setIsAddRouteOpen] = useState(false);
+  const [isEditRouteMode, setIsEditRouteMode] = useState(false);
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
+  const [isAssignVehicleOpen, setIsAssignVehicleOpen] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
   
@@ -272,6 +279,56 @@ const Transport = () => {
     status: 'active',
     lastService: new Date().toISOString().split('T')[0],
     nextService: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
+  });
+
+  // New driver form state
+  type NewDriverForm = {
+    employeeId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    licenseNo: string;
+    licenseExpiry: string;
+    experience: number;
+    status: 'active' | 'on-leave' | 'suspended' | 'inactive';
+  };
+  
+  const [newDriver, setNewDriver] = useState<NewDriverForm>({
+    employeeId: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    licenseNo: '',
+    licenseExpiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+    experience: 0,
+    status: 'active',
+  });
+
+  // New route form state
+  type NewRouteForm = {
+    routeNo: string;
+    name: string;
+    startPoint: string;
+    endPoint: string;
+    stops: string;
+    totalDistance: number;
+    estimatedTime: number;
+    zone: 'north' | 'south' | 'east' | 'west' | 'central';
+    status: 'active' | 'inactive' | 'under-maintenance';
+  };
+  
+  const [newRoute, setNewRoute] = useState<NewRouteForm>({
+    routeNo: '',
+    name: '',
+    startPoint: '',
+    endPoint: '',
+    stops: '',
+    totalDistance: 0,
+    estimatedTime: 0,
+    zone: 'central',
+    status: 'active',
   });
 
   // Dashboard data
@@ -596,8 +653,8 @@ const Transport = () => {
       const response = await vehicleApi.updateFuelLevel(vehicleId, { fuelLevel });
       if (response.success) {
         toast({
-          title: "Fuel Updated",
-          description: "Fuel level updated successfully",
+          title: "Fuel Level Updated",
+          description: "Vehicle fuel level updated successfully",
         });
         fetchVehicles();
       }
@@ -605,6 +662,202 @@ const Transport = () => {
       toast({
         title: "Error",
         description: "Failed to update fuel level",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Driver Handlers
+  const handleAddDriver = async () => {
+    try {
+      if (!newDriver.employeeId || !newDriver.firstName || !newDriver.lastName || !newDriver.licenseNo) {
+        toast({
+          title: "Missing Information",
+          description: "Please fill in all required fields",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const response = await driverApi.createDriver(newDriver);
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Driver added successfully",
+        });
+        setIsAddDriverOpen(false);
+        setNewDriver({
+          employeeId: '',
+          firstName: '',
+          lastName: '',
+          email: '',
+          phone: '',
+          licenseNo: '',
+          licenseExpiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+          experience: 0,
+          status: 'active',
+        });
+        fetchDrivers();
+        fetchDashboardStats();
+      }
+    } catch (error: any) {
+      console.error('Error adding driver:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to add driver",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Route Handlers
+  const handleOpenEditRoute = (route: Route) => {
+    setIsEditRouteMode(true);
+    setEditingRouteId(route._id);
+    // Populate form with existing route data
+    const stopsString = route.stops?.map(stop => stop.name).join(', ') || '';
+    setNewRoute({
+      routeNo: route.routeNo,
+      name: route.name,
+      startPoint: route.startPoint,
+      endPoint: route.endPoint,
+      stops: stopsString,
+      totalDistance: route.totalDistance,
+      estimatedTime: route.estimatedTime,
+      zone: route.zone,
+      status: route.status,
+    });
+    setIsAddRouteOpen(true);
+  };
+
+  const handleAddRoute = async () => {
+    try {
+      if (!newRoute.routeNo || !newRoute.name || !newRoute.startPoint || !newRoute.endPoint) {
+        toast({
+          title: "Missing Information",
+          description: "Please fill in all required fields (Route No, Name, Start Point, End Point)",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Parse stops from comma-separated string to proper format
+      const stopsArray = newRoute.stops
+        .split(',')
+        .map((stop, index) => stop.trim())
+        .filter(stop => stop !== '')
+        .map((stopName, index) => ({
+          stopNo: index + 1,
+          name: stopName,
+          address: stopName, // Using same as name for now
+          lat: 0, // Default coordinates (can be updated later)
+          lng: 0,
+          arrivalTime: '00:00',
+          departureTime: '00:00',
+          students: 0
+        }));
+
+      const payload = {
+        routeNo: newRoute.routeNo,
+        name: newRoute.name,
+        zone: newRoute.zone,
+        startPoint: newRoute.startPoint,
+        endPoint: newRoute.endPoint,
+        totalDistance: newRoute.totalDistance,
+        estimatedTime: newRoute.estimatedTime,
+        stops: stopsArray,
+        status: newRoute.status,
+      };
+
+      let response;
+      if (isEditRouteMode && editingRouteId) {
+        // Update existing route
+        response = await routeApi.updateRoute(editingRouteId, payload);
+      } else {
+        // Create new route
+        response = await routeApi.createRoute(payload);
+      }
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: isEditRouteMode ? "Route updated successfully" : "Route added successfully",
+        });
+        setIsAddRouteOpen(false);
+        setIsEditRouteMode(false);
+        setEditingRouteId(null);
+        setNewRoute({
+          routeNo: '',
+          name: '',
+          startPoint: '',
+          endPoint: '',
+          stops: '',
+          totalDistance: 0,
+          estimatedTime: 0,
+          zone: 'central',
+          status: 'active',
+        });
+        fetchRoutes();
+        fetchDashboardStats();
+      }
+    } catch (error: any) {
+      console.error('Error adding route:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to add route",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Assign Vehicle to Route
+  const handleAssignVehicle = async (vehicleId: string) => {
+    if (!selectedRoute) return;
+
+    try {
+      const response = await routeApi.assignVehicle(selectedRoute._id, vehicleId);
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Vehicle assigned to route successfully",
+        });
+        setIsAssignVehicleOpen(false);
+        setSelectedRoute(null);
+        fetchRoutes();
+        fetchVehicles();
+      }
+    } catch (error: any) {
+      console.error('Error assigning vehicle:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to assign vehicle",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Unassign Vehicle from Route
+  const handleUnassignVehicle = async (routeId: string) => {
+    try {
+      const response = await routeApi.updateRoute(routeId, {
+        assignedVehicle: null
+      });
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Vehicle unassigned from route successfully",
+        });
+        fetchRoutes();
+        fetchVehicles();
+      }
+    } catch (error: any) {
+      console.error('Error unassigning vehicle:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to unassign vehicle",
         variant: "destructive",
       });
     }
@@ -741,13 +994,13 @@ const Transport = () => {
             Refresh
           </Button>
 
+          <Button onClick={() => setIsAddVehicleOpen(true)} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Add Vehicle
+          </Button>
+
+          {/* Add Vehicle Dialog (Controlled) */}
           <Dialog open={isAddVehicleOpen} onOpenChange={setIsAddVehicleOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Vehicle
-              </Button>
-            </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Add New Vehicle</DialogTitle>
@@ -899,6 +1152,322 @@ const Transport = () => {
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : null}
                   Add Vehicle
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Add Driver Dialog */}
+          <Dialog open={isAddDriverOpen} onOpenChange={setIsAddDriverOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Add New Driver</DialogTitle>
+                <DialogDescription>
+                  Add a new driver to your transport fleet
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="employeeId">Employee ID*</Label>
+                  <Input
+                    id="employeeId"
+                    value={newDriver.employeeId}
+                    onChange={(e) => setNewDriver({...newDriver, employeeId: e.target.value})}
+                    placeholder="DRV-001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name*</Label>
+                  <Input
+                    id="firstName"
+                    value={newDriver.firstName}
+                    onChange={(e) => setNewDriver({...newDriver, firstName: e.target.value})}
+                    placeholder="John"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name*</Label>
+                  <Input
+                    id="lastName"
+                    value={newDriver.lastName}
+                    onChange={(e) => setNewDriver({...newDriver, lastName: e.target.value})}
+                    placeholder="Doe"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newDriver.email}
+                    onChange={(e) => setNewDriver({...newDriver, email: e.target.value})}
+                    placeholder="driver@school.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={newDriver.phone}
+                    onChange={(e) => setNewDriver({...newDriver, phone: e.target.value})}
+                    placeholder="9876543210"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="licenseNo">License Number*</Label>
+                  <Input
+                    id="licenseNo"
+                    value={newDriver.licenseNo}
+                    onChange={(e) => setNewDriver({...newDriver, licenseNo: e.target.value})}
+                    placeholder="KA1234567890"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="licenseExpiry">License Expiry Date</Label>
+                  <Input
+                    id="licenseExpiry"
+                    type="date"
+                    value={newDriver.licenseExpiry}
+                    onChange={(e) => setNewDriver({...newDriver, licenseExpiry: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="experience">Experience (years)</Label>
+                  <Input
+                    id="experience"
+                    type="number"
+                    value={newDriver.experience}
+                    onChange={(e) => setNewDriver({...newDriver, experience: parseInt(e.target.value) || 0})}
+                    min="0"
+                    placeholder="5"
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="driverStatus">Status</Label>
+                  <Select
+                    value={newDriver.status}
+                    onValueChange={(value: 'active' | 'on-leave' | 'suspended' | 'inactive') => 
+                      setNewDriver({...newDriver, status: value})
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="on-leave">On Leave</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAddDriverOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAddDriver} disabled={isLoading.drivers}>
+                  {isLoading.drivers ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : null}
+                  Add Driver
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Add/Edit Route Dialog */}
+          <Dialog open={isAddRouteOpen} onOpenChange={(open) => {
+            setIsAddRouteOpen(open);
+            if (!open) {
+              // Reset form when dialog closes
+              setIsEditRouteMode(false);
+              setEditingRouteId(null);
+              setNewRoute({
+                routeNo: '',
+                name: '',
+                startPoint: '',
+                endPoint: '',
+                stops: '',
+                totalDistance: 0,
+                estimatedTime: 0,
+                zone: 'central',
+                status: 'active',
+              });
+            }
+          }}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{isEditRouteMode ? 'Edit Route' : 'Add New Route'}</DialogTitle>
+                <DialogDescription>
+                  {isEditRouteMode ? 'Update transport route details and stops' : 'Create a new transport route with stops'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="routeNo">Route No.*</Label>
+                  <Input
+                    id="routeNo"
+                    value={newRoute.routeNo}
+                    onChange={(e) => setNewRoute({...newRoute, routeNo: e.target.value})}
+                    placeholder="R-001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="routeName">Route Name*</Label>
+                  <Input
+                    id="routeName"
+                    value={newRoute.name}
+                    onChange={(e) => setNewRoute({...newRoute, name: e.target.value})}
+                    placeholder="North City Route"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="startPoint">Start Point*</Label>
+                  <Input
+                    id="startPoint"
+                    value={newRoute.startPoint}
+                    onChange={(e) => setNewRoute({...newRoute, startPoint: e.target.value})}
+                    placeholder="School"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endPoint">End Point*</Label>
+                  <Input
+                    id="endPoint"
+                    value={newRoute.endPoint}
+                    onChange={(e) => setNewRoute({...newRoute, endPoint: e.target.value})}
+                    placeholder="Bus Depot"
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="stops">Stops (comma-separated)</Label>
+                  <Input
+                    id="stops"
+                    value={newRoute.stops}
+                    onChange={(e) => setNewRoute({...newRoute, stops: e.target.value})}
+                    placeholder="Stop 1, Stop 2, Stop 3"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="totalDistance">Total Distance (km)</Label>
+                  <Input
+                    id="totalDistance"
+                    type="number"
+                    value={newRoute.totalDistance}
+                    onChange={(e) => setNewRoute({...newRoute, totalDistance: parseFloat(e.target.value) || 0})}
+                    min="0"
+                    step="0.1"
+                    placeholder="15.5"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="estimatedTime">Estimated Time (minutes)</Label>
+                  <Input
+                    id="estimatedTime"
+                    type="number"
+                    value={newRoute.estimatedTime}
+                    onChange={(e) => setNewRoute({...newRoute, estimatedTime: parseInt(e.target.value) || 0})}
+                    min="0"
+                    placeholder="45"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="zone">Zone</Label>
+                  <Select
+                    value={newRoute.zone}
+                    onValueChange={(value: 'north' | 'south' | 'east' | 'west' | 'central') => 
+                      setNewRoute({...newRoute, zone: value})
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select zone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="north">North</SelectItem>
+                      <SelectItem value="south">South</SelectItem>
+                      <SelectItem value="east">East</SelectItem>
+                      <SelectItem value="west">West</SelectItem>
+                      <SelectItem value="central">Central</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="routeStatus">Status</Label>
+                  <Select
+                    value={newRoute.status}
+                    onValueChange={(value: 'active' | 'inactive' | 'under-maintenance') => 
+                      setNewRoute({...newRoute, status: value})
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="under-maintenance">Under Maintenance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAddRouteOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAddRoute} disabled={isLoading.routes}>
+                  {isLoading.routes ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : null}
+                  {isEditRouteMode ? 'Update Route' : 'Add Route'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Assign Vehicle to Route Dialog */}
+          <Dialog open={isAssignVehicleOpen} onOpenChange={setIsAssignVehicleOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Assign Vehicle to Route</DialogTitle>
+                <DialogDescription>
+                  Select a vehicle to assign to {selectedRoute?.routeNo} - {selectedRoute?.name}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                {vehicles.filter(v => v.status === 'active').length === 0 ? (
+                  <p className="text-center text-gray-500">No available vehicles</p>
+                ) : (
+                  vehicles
+                    .filter(v => v.status === 'active')
+                    .map((vehicle) => (
+                      <Card 
+                        key={vehicle._id} 
+                        className="cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => handleAssignVehicle(vehicle._id)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold">{vehicle.vehicleNo}</p>
+                              <p className="text-sm text-gray-600">{vehicle.make} {vehicle.model}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-gray-600">Capacity</p>
+                              <p className="font-semibold">{vehicle.capacity}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => {
+                  setIsAssignVehicleOpen(false);
+                  setSelectedRoute(null);
+                }}>
+                  Cancel
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1059,11 +1628,19 @@ const Transport = () => {
         <TabsContent value="fleet" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bus className="h-5 w-5" />
-                Vehicle Fleet
-              </CardTitle>
-              <CardDescription>Manage and monitor all vehicles in the fleet</CardDescription>
+              <div className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bus className="h-5 w-5" />
+                    Vehicle Fleet
+                  </CardTitle>
+                  <CardDescription>Manage and monitor all vehicles in the fleet</CardDescription>
+                </div>
+                <Button onClick={() => setIsAddVehicleOpen(true)} className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Vehicle
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {isLoading.vehicles ? (
@@ -1234,11 +1811,19 @@ const Transport = () => {
         <TabsContent value="drivers" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Drivers
-              </CardTitle>
-              <CardDescription>Manage drivers and their assignments</CardDescription>
+              <div className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Drivers
+                  </CardTitle>
+                  <CardDescription>Manage drivers and their assignments</CardDescription>
+                </div>
+                <Button onClick={() => setIsAddDriverOpen(true)} className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Driver
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {isLoading.drivers ? (
@@ -1254,9 +1839,9 @@ const Transport = () => {
                         <TableHead>Driver ID</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Contact</TableHead>
-                        <TableHead>License</TableHead>
+                        <TableHead>License No.</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Assigned Vehicle</TableHead>
+                        <TableHead>Assigned Vehicle & Route</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1264,24 +1849,46 @@ const Transport = () => {
                       {drivers.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                            No drivers found.
+                            No drivers found. Click "Add Driver" to add your first driver.
                           </TableCell>
                         </TableRow>
                       ) : (
                         drivers.map((driver) => (
                           <TableRow key={driver._id}>
                             <TableCell className="font-medium">
-                              {driver.employeeId}
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline">{driver.employeeId}</Badge>
+                              </div>
                             </TableCell>
                             <TableCell>
-                              <div className="font-medium">{driver.firstName} {driver.lastName}</div>
-                              <div className="text-xs text-gray-500">{driver.email}</div>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback>
+                                    {driver.firstName[0]}{driver.lastName[0]}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="font-medium">{driver.firstName} {driver.lastName}</div>
+                                  <div className="text-xs text-gray-500">{driver.email}</div>
+                                </div>
+                              </div>
                             </TableCell>
                             <TableCell>
-                              <div className="font-medium">{driver.phone}</div>
+                              <div className="flex items-center gap-1">
+                                <Phone className="h-3 w-3 text-gray-500" />
+                                <span className="font-medium">{driver.phone}</span>
+                              </div>
                             </TableCell>
                             <TableCell>
-                              <div className="font-medium">{driver.licenseNo}</div>
+                              <div className="flex items-center gap-1">
+                                <Shield className="h-3 w-3 text-blue-600" />
+                                <span className="font-medium">{driver.licenseNo}</span>
+                              </div>
+                              {driver.licenseExpiry && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Exp: {new Date(driver.licenseExpiry).toLocaleDateString()}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell>
                               <Badge variant={
@@ -1289,23 +1896,68 @@ const Transport = () => {
                                 driver.status === 'on-leave' ? 'secondary' :
                                 driver.status === 'suspended' ? 'destructive' : 'outline'
                               }>
-                                {driver.status}
+                                {driver.status.toUpperCase().replace('-', ' ')}
                               </Badge>
                             </TableCell>
                             <TableCell>
                               {driver.assignedVehicle ? (
-                                <div>
-                                  <div className="font-medium">{driver.assignedVehicle.vehicleNo}</div>
-                                  <div className="text-xs text-gray-500">{driver.assignedVehicle.model}</div>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <Bus className="h-4 w-4 text-blue-600" />
+                                    <div>
+                                      <div className="font-medium">{driver.assignedVehicle.vehicleNo}</div>
+                                      <div className="text-xs text-gray-500">{driver.assignedVehicle.model}</div>
+                                    </div>
+                                  </div>
+                                  {/* Find and display route for this vehicle */}
+                                  {(() => {
+                                    const vehicleRoute = routes.find(r => 
+                                      r.assignedVehicle?.vehicleNo === driver.assignedVehicle?.vehicleNo
+                                    );
+                                    if (vehicleRoute) {
+                                      return (
+                                        <div className="flex items-center gap-2 mt-1 pl-6">
+                                          <Route className="h-3 w-3 text-green-600" />
+                                          <div className="text-xs">
+                                            <span className="font-medium text-green-700">{vehicleRoute.routeNo}</span>
+                                            <span className="text-gray-500"> - {vehicleRoute.name}</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <div className="text-xs text-amber-600 mt-1 pl-6">
+                                        No route assigned
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               ) : (
-                                <span className="text-gray-400">Unassigned</span>
+                                <span className="text-gray-400 text-sm">No vehicle assigned</span>
                               )}
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button variant="ghost" size="sm">
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit Driver
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem>
+                                    <Truck className="h-4 w-4 mr-2" />
+                                    Assign Vehicle
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-red-600">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Remove Driver
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
                         ))
@@ -1322,11 +1974,19 @@ const Transport = () => {
         <TabsContent value="routes" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Route className="h-5 w-5" />
-                Route Management
-              </CardTitle>
-              <CardDescription>Manage transport routes and assignments</CardDescription>
+              <div className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Route className="h-5 w-5" />
+                    Route Management
+                  </CardTitle>
+                  <CardDescription>Manage transport routes and assignments</CardDescription>
+                </div>
+                <Button onClick={() => setIsAddRouteOpen(true)} className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Route
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {isLoading.routes ? (
@@ -1386,12 +2046,63 @@ const Transport = () => {
                               <span className="text-gray-600">Time: </span>
                               <span className="font-medium">{route.estimatedTime} mins</span>
                             </div>
-                            <div>
+                            <div className="flex items-center gap-2">
                               {route.assignedVehicle ? (
-                                <span className="text-green-600">Vehicle Assigned</span>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="default" className="bg-green-600">
+                                    <Truck className="h-3 w-3 mr-1" />
+                                    {route.assignedVehicle.vehicleNo}
+                                  </Badge>
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost"
+                                    onClick={() => handleUnassignVehicle(route._id)}
+                                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    title="Unassign Vehicle"
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               ) : (
-                                <span className="text-red-600">No Vehicle</span>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedRoute(route);
+                                    setIsAssignVehicleOpen(true);
+                                  }}
+                                  className="flex items-center gap-1"
+                                >
+                                  <Truck className="h-3 w-3" />
+                                  Assign Vehicle
+                                </Button>
                               )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleOpenEditRoute(route)}>
+                                    <Pencil className="h-4 w-4 mr-2" />
+                                    Edit Route
+                                  </DropdownMenuItem>
+                                  {route.assignedVehicle && (
+                                    <DropdownMenuItem 
+                                      onClick={() => handleUnassignVehicle(route._id)}
+                                      className="text-orange-600"
+                                    >
+                                      <XCircle className="h-4 w-4 mr-2" />
+                                      Unassign Vehicle
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem className="text-red-600">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete Route
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         </CardContent>

@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { BookOpen, Users, UserCheck, Clock, ChevronRight } from 'lucide-react';
+import { BookOpen, Users, UserCheck, Clock, ChevronRight, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { QuickActions } from '@/components/dashboard/QuickActions';
 
 const todaysClasses = [
   { id: 1, class: '10-A', subject: 'Mathematics', time: '08:30 AM', status: 'completed' },
@@ -50,6 +52,8 @@ const riskStyles = {
 };
 
 export default function TeacherDashboard() {
+  const navigate = useNavigate();
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -137,6 +141,46 @@ export default function TeacherDashboard() {
         </Card>
 
         <AIInsightCard insights={aiInsights} />
+      </div>
+
+      {/* Quick Actions & My Schedule */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <QuickActions role="teacher" />
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-blue-600" />
+                My Weekly Schedule
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/timetable')}
+              >
+                View Full <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Click "View Full" to see your complete weekly timetable with all assigned classes.
+            </p>
+            <div className="grid gap-2 md:grid-cols-2">
+              {todaysClasses.slice(0, 4).map((cls) => (
+                <div key={cls.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <div>
+                    <p className="font-medium text-sm">{cls.class}</p>
+                    <p className="text-xs text-muted-foreground">{cls.time}</p>
+                  </div>
+                  <Badge className={statusStyles[cls.status as keyof typeof statusStyles]}>
+                    {cls.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* At-Risk Students */}

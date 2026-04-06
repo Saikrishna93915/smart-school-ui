@@ -136,6 +136,18 @@ export const routeApi = {
     return response.data;
   },
 
+  updateRoute: async (id: string, data: any) => {
+    const response = await api.put(`${TRANSPORT_BASE}/routes/${id}`, data);
+    return response.data;
+  },
+
+  assignVehicle: async (routeId: string, vehicleId: string) => {
+    const response = await api.put(`${TRANSPORT_BASE}/routes/${routeId}`, {
+      assignedVehicle: vehicleId
+    });
+    return response.data;
+  },
+
   getRouteStats: async () => {
     const response = await api.get(`${TRANSPORT_BASE}/routes-stats`);
     return response.data;

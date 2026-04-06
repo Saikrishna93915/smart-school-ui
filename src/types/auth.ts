@@ -7,17 +7,25 @@ export type UserRole =
   | "teacher"
   | "parent"
   | "student"
-  | "accountant"; // Added accountant role
+  | "accountant"
+  | "cashier"
+  | "principal"
+  | "driver";
 
 /* =========================
    USER (AUTH CONTEXT)
    – MUST MATCH BACKEND LOGIN RESPONSE
 ========================= */
 export interface User {
+  _id?: string;                // optional MongoDB id
+  id?: string;                 // optional normalized id
   name: string;                 // ✅ REQUIRED (Nagendra Babu)
   role: UserRole;               // ✅ REQUIRED
   forcePasswordChange: boolean; // ✅ REQUIRED
   email?: string;               // optional (useful later)
+  phone?: string;               // optional phone number
+  createdAt?: string;           // account creation date
+  updatedAt?: string;           // last update date
 }
 
 /* =========================
@@ -37,7 +45,10 @@ export const roleLabels: Record<UserRole, string> = {
   teacher: "Teacher",
   parent: "Parent",
   student: "Student",
-  accountant: "Accountant", // Added accountant label
+  accountant: "Accountant",
+  cashier: "Cashier",
+  principal: "Principal",
+  driver: "Driver",
 };
 
 /* =========================
@@ -49,5 +60,8 @@ export const roleColors: Record<UserRole, string> = {
   teacher: "bg-secondary text-secondary-foreground",
   parent: "bg-accent text-accent-foreground",
   student: "bg-success text-success-foreground",
-  accountant: "bg-blue-500 text-blue-50", // Added accountant color (blue theme)
+  accountant: "bg-blue-500 text-blue-50",
+  cashier: "bg-teal-500 text-teal-50",
+  principal: "bg-indigo-600 text-white",
+  driver: "bg-orange-500 text-orange-50",
 };

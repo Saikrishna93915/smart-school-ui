@@ -1,6 +1,7 @@
 /**
  * Notification service for sending reminders and alerts
  */
+import { getStoredToken } from '@/lib/auth/storage';
 
 export interface NotificationRequest {
     type: 'payment_reminder' | 'receipt' | 'overdue_alert' | 'payment_confirmation';
@@ -227,7 +228,7 @@ export interface NotificationRequest {
     }
     
     private getAuthToken(): string {
-      return localStorage.getItem('authToken') || '';
+      return getStoredToken() || '';
     }
   }
   
