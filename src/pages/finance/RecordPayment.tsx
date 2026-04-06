@@ -178,11 +178,25 @@ interface PaymentFormData {
 
 /**
  * Validate payment method-specific required fields
+ * UTR/Transaction Reference is MANDATORY for ALL payment methods EXCEPT cash
  */
 function validatePaymentMethodDetails(formData: PaymentFormData): string | null {
-  const { paymentMethod, upiId, transactionId, utrNo, bankName, chequeNo, chequeDate, ifscCode, cardLast4, referenceNo } = formData;
+  const { paymentMethod, upiId, utrNo, bankName, chequeNo, chequeDate, ifscCode, cardLast4 } = formData;
   const errors: string[] = [];
 
+  // Cash payments: No reference number required
+  if (paymentMethod === 'cash') {
+    return null;
+  }
+
+  // ALL non-cash payments require UTR/Transaction Reference (12-35 chars)
+  if (!utrNo || utrNo.trim() === '') {
+    errors.push('Transaction Reference Number (UTR/RRN) is required for all non-cash payments');
+  } else if (!/^[A-Za-z0-9]{12,35}$/.test(utrNo.trim())) {
+    errors.push('Transaction Reference Number must be 12-35 alphanumeric characters');
+  }
+
+  // Payment method-specific validations
   switch (paymentMethod) {
     case 'upi':
       if (!upiId || upiId.trim() === '') {
@@ -190,27 +204,11 @@ function validatePaymentMethodDetails(formData: PaymentFormData): string | null 
       } else if (!/^[\w.-]+@[\w]+$/.test(upiId)) {
         errors.push('Invalid UPI ID format. Example: username@paytm');
       }
-
-      if (!transactionId || transactionId.trim() === '') {
-        errors.push('Transaction ID is required');
-      } else if (!/^[A-Za-z0-9]{12,20}$/.test(transactionId.trim())) {
-        errors.push('Transaction ID must be 12-20 alphanumeric characters');
-      }
       break;
 
     case 'bank-transfer':
-      if (!utrNo || utrNo.trim() === '') {
-        errors.push('Transaction reference number (UTR/RRN) is required');
-      } else if (!/^[A-Za-z0-9]{12,35}$/.test(utrNo.trim())) {
-        errors.push('Reference number must be 12-35 alphanumeric characters');
-      }
-
       if (!bankName || bankName.trim() === '') {
         errors.push('Bank name is required');
-      }
-
-      if (!transactionId || transactionId.trim() === '') {
-        errors.push('Transaction ID is required');
       }
 
       if (!ifscCode || ifscCode.trim() === '') {
@@ -256,33 +254,15 @@ function validatePaymentMethodDetails(formData: PaymentFormData): string | null 
       break;
 
     case 'card':
-      if (!transactionId || transactionId.trim() === '') {
-        errors.push('Transaction ID is required');
-      }
-
       if (!cardLast4 || cardLast4.trim() === '') {
         errors.push('Last 4 digits of card are required');
       } else if (!/^\d{4}$/.test(cardLast4.trim())) {
         errors.push('Card last 4 digits must be exactly 4 digits');
       }
-
-      if (!referenceNo || referenceNo.trim() === '') {
-        errors.push('Reference number is required');
-      }
       break;
 
     case 'online':
-      if (!transactionId || transactionId.trim() === '') {
-        errors.push('Transaction ID is required');
-      }
-
-      if (!referenceNo || referenceNo.trim() === '') {
-        errors.push('Reference number is required');
-      }
-      break;
-
-    case 'cash':
-      // Cash only requires amount, no additional validation
+      // Online payments only require UTR (already validated above)
       break;
 
     default:
@@ -683,11 +663,11 @@ export default function RecordPayment() {
   // Payment Methods Configuration
   const paymentMethods = [
     { value: 'cash', label: 'Cash', icon: Wallet, requiresRef: false, fields: [] },
-    { value: 'cheque', label: 'Cheque', icon: FileSignature, requiresRef: true, fields: ['bankName', 'chequeNo', 'chequeDate', 'ifscCode'] },
-    { value: 'bank-transfer', label: 'Bank Transfer', icon: Building, requiresRef: true, fields: ['utrNo', 'bankName', 'ifscCode', 'transactionId', 'accountNumber'] },
-    { value: 'upi', label: 'UPI', icon: Smartphone, requiresRef: true, fields: ['upiId', 'transactionId'] },
-    { value: 'card', label: 'Credit/Debit Card', icon: CreditCard, requiresRef: true, fields: ['transactionId', 'cardLast4', 'referenceNo'] },
-    { value: 'online', label: 'Online Payment', icon: Globe, requiresRef: true, fields: ['transactionId', 'referenceNo'] },
+    { value: 'upi', label: 'UPI', icon: Smartphone, requiresRef: true, fields: ['utrNo', 'upiId'] },
+    { value: 'bank-transfer', label: 'Bank Transfer', icon: Building, requiresRef: true, fields: ['utrNo', 'bankName', 'ifscCode', 'accountNumber'] },
+    { value: 'cheque', label: 'Cheque', icon: FileSignature, requiresRef: true, fields: ['utrNo', 'chequeNo', 'bankName', 'chequeDate', 'ifscCode'] },
+    { value: 'card', label: 'Credit/Debit Card', icon: CreditCard, requiresRef: true, fields: ['utrNo', 'cardLast4'] },
+    { value: 'online', label: 'Online Payment', icon: Globe, requiresRef: true, fields: ['utrNo'] },
   ];
   
   // Computed Values
@@ -1835,7 +1815,7 @@ export default function RecordPayment() {
                       handleFieldChange('utrNo', value);
                     }}
                   />
-                  <p className="text-xs text-gray-500">12-35 characters. UPI/IMPS: 12 digits | NEFT: 16 chars | RTGS: 22 chars | PhonePe/GPay: 20-35 chars</p>
+                  <p className="text-xs text-gray-500">Required for ALL non-cash payments. UPI/IMPS: 12 digits | NEFT: 16 | RTGS: 22 | PhonePe/GPay: 20-35</p>
                 </div>
               )}
               
