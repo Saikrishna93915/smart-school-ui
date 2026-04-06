@@ -179,9 +179,10 @@ interface PaymentFormData {
 /**
  * Validate payment method-specific required fields
  * UTR/Transaction Reference is MANDATORY for ALL payment methods EXCEPT cash
+ * Transaction ID is MANDATORY for UPI, Card, and Online payments
  */
 function validatePaymentMethodDetails(formData: PaymentFormData): string | null {
-  const { paymentMethod, upiId, utrNo, bankName, chequeNo, chequeDate, ifscCode, cardLast4 } = formData;
+  const { paymentMethod, upiId, utrNo, bankName, chequeNo, chequeDate, ifscCode, cardLast4, transactionId, referenceNo } = formData;
   const errors: string[] = [];
 
   // Cash payments: No reference number required
@@ -199,6 +200,13 @@ function validatePaymentMethodDetails(formData: PaymentFormData): string | null 
   // Payment method-specific validations
   switch (paymentMethod) {
     case 'upi':
+      // UPI requires BOTH UTR (from bank) + Transaction ID (from app)
+      if (!transactionId || transactionId.trim() === '') {
+        errors.push('Transaction ID (App Reference) is required');
+      } else if (!/^[A-Za-z0-9]{12,35}$/.test(transactionId.trim())) {
+        errors.push('Transaction ID must be 12-35 alphanumeric characters');
+      }
+
       if (!upiId || upiId.trim() === '') {
         errors.push('UPI ID is required');
       } else if (!/^[\w.-]+@[\w]+$/.test(upiId)) {
@@ -254,6 +262,13 @@ function validatePaymentMethodDetails(formData: PaymentFormData): string | null 
       break;
 
     case 'card':
+      // Card requires BOTH UTR (from bank) + Transaction ID (from gateway)
+      if (!transactionId || transactionId.trim() === '') {
+        errors.push('Transaction ID (Gateway Reference) is required');
+      } else if (!/^[A-Za-z0-9]{12,35}$/.test(transactionId.trim())) {
+        errors.push('Transaction ID must be 12-35 alphanumeric characters');
+      }
+
       if (!cardLast4 || cardLast4.trim() === '') {
         errors.push('Last 4 digits of card are required');
       } else if (!/^\d{4}$/.test(cardLast4.trim())) {
@@ -262,7 +277,16 @@ function validatePaymentMethodDetails(formData: PaymentFormData): string | null 
       break;
 
     case 'online':
-      // Online payments only require UTR (already validated above)
+      // Online requires BOTH UTR (from bank) + Transaction ID (from gateway)
+      if (!transactionId || transactionId.trim() === '') {
+        errors.push('Transaction ID (Gateway Reference) is required');
+      } else if (!/^[A-Za-z0-9]{12,35}$/.test(transactionId.trim())) {
+        errors.push('Transaction ID must be 12-35 alphanumeric characters');
+      }
+
+      if (!referenceNo || referenceNo.trim() === '') {
+        errors.push('Payment Gateway/Platform name is required');
+      }
       break;
 
     default:
@@ -663,11 +687,11 @@ export default function RecordPayment() {
   // Payment Methods Configuration
   const paymentMethods = [
     { value: 'cash', label: 'Cash', icon: Wallet, requiresRef: false, fields: [] },
-    { value: 'upi', label: 'UPI', icon: Smartphone, requiresRef: true, fields: ['utrNo', 'upiId'] },
+    { value: 'upi', label: 'UPI', icon: Smartphone, requiresRef: true, fields: ['utrNo', 'transactionId', 'upiId'] },
     { value: 'bank-transfer', label: 'Bank Transfer', icon: Building, requiresRef: true, fields: ['utrNo', 'bankName', 'ifscCode', 'accountNumber'] },
     { value: 'cheque', label: 'Cheque', icon: FileSignature, requiresRef: true, fields: ['utrNo', 'chequeNo', 'bankName', 'chequeDate', 'ifscCode'] },
-    { value: 'card', label: 'Credit/Debit Card', icon: CreditCard, requiresRef: true, fields: ['utrNo', 'cardLast4'] },
-    { value: 'online', label: 'Online Payment', icon: Globe, requiresRef: true, fields: ['utrNo'] },
+    { value: 'card', label: 'Credit/Debit Card', icon: CreditCard, requiresRef: true, fields: ['utrNo', 'transactionId', 'cardLast4'] },
+    { value: 'online', label: 'Online Payment', icon: Globe, requiresRef: true, fields: ['utrNo', 'transactionId', 'referenceNo'] },
   ];
   
   // Computed Values
@@ -1789,17 +1813,17 @@ export default function RecordPayment() {
               
               {selectedMethod.fields.includes('transactionId') && (
                 <div className="space-y-2">
-                  <Label>Transaction ID *</Label>
+                  <Label>Transaction ID (App/Gateway Reference) *</Label>
                   <Input
-                    placeholder="Enter transaction ID (6-20 alphanumeric characters)"
+                    placeholder="Enter app or gateway transaction ID"
                     value={formData.transactionId}
-                    maxLength={20}
+                    maxLength={35}
                     onChange={(e) => {
                       const value = e.target.value.replace(/[^A-Za-z0-9]/g, '');
                       handleFieldChange('transactionId', value);
                     }}
                   />
-                  <p className="text-xs text-gray-500">Only alphanumeric characters allowed (max 20)</p>
+                  <p className="text-xs text-gray-500">12-35 alphanumeric chars. PhonePe: NX..., GPay: ID, Razorpay: pay_...</p>
                 </div>
               )}
               
@@ -1879,14 +1903,29 @@ export default function RecordPayment() {
                 </div>
               )}
               
-              <div className="space-y-2">
-                <Label>Reference Number (Optional)</Label>
-                <Input
-                  placeholder="Additional reference"
-                  value={formData.referenceNo}
-                  onChange={(e) => handleFieldChange('referenceNo', e.target.value)}
-                />
-              </div>
+              {selectedMethod.fields.includes('referenceNo') && (
+                <div className="space-y-2">
+                  <Label>Payment Gateway/Platform Name *</Label>
+                  <Input
+                    placeholder="e.g., Razorpay, Paytm, PhonePe Business"
+                    value={formData.referenceNo}
+                    maxLength={50}
+                    onChange={(e) => handleFieldChange('referenceNo', e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500">Name of payment gateway or platform used</p>
+                </div>
+              )}
+
+              {!selectedMethod.fields.includes('referenceNo') && (
+                <div className="space-y-2">
+                  <Label>Reference Number (Optional)</Label>
+                  <Input
+                    placeholder="Additional reference"
+                    value={formData.referenceNo}
+                    onChange={(e) => handleFieldChange('referenceNo', e.target.value)}
+                  />
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
