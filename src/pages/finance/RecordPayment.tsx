@@ -1784,10 +1784,15 @@ export default function RecordPayment() {
                 <div className="space-y-2">
                   <Label>Cheque Number *</Label>
                   <Input
-                    placeholder="Enter cheque number"
+                    placeholder="Enter 6-9 digit cheque number"
                     value={formData.chequeNo}
-                    onChange={(e) => handleFieldChange('chequeNo', e.target.value)}
+                    maxLength={9}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      handleFieldChange('chequeNo', value);
+                    }}
                   />
+                  <p className="text-xs text-gray-500">6-9 digits only</p>
                 </div>
               )}
               
@@ -1806,10 +1811,15 @@ export default function RecordPayment() {
                 <div className="space-y-2">
                   <Label>Transaction ID *</Label>
                   <Input
-                    placeholder="Enter transaction ID"
+                    placeholder="Enter transaction ID (6-20 alphanumeric characters)"
                     value={formData.transactionId}
-                    onChange={(e) => handleFieldChange('transactionId', e.target.value)}
+                    maxLength={20}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^A-Za-z0-9]/g, '');
+                      handleFieldChange('transactionId', value);
+                    }}
                   />
+                  <p className="text-xs text-gray-500">Only alphanumeric characters allowed (max 20)</p>
                 </div>
               )}
               
@@ -1817,10 +1827,15 @@ export default function RecordPayment() {
                 <div className="space-y-2">
                   <Label>UTR Number *</Label>
                   <Input
-                    placeholder="Enter UTR number"
+                    placeholder="Enter 12-digit UTR number"
                     value={formData.utrNo}
-                    onChange={(e) => handleFieldChange('utrNo', e.target.value)}
+                    maxLength={12}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      handleFieldChange('utrNo', value);
+                    }}
                   />
+                  <p className="text-xs text-gray-500">Exactly 12 digits required</p>
                 </div>
               )}
               
@@ -1830,8 +1845,57 @@ export default function RecordPayment() {
                   <Input
                     placeholder="e.g., 9876543210@upi"
                     value={formData.upiId}
+                    maxLength={50}
                     onChange={(e) => handleFieldChange('upiId', e.target.value)}
                   />
+                </div>
+              )}
+
+              {selectedMethod.fields.includes('ifscCode') && (
+                <div className="space-y-2">
+                  <Label>IFSC Code *</Label>
+                  <Input
+                    placeholder="e.g., SBIN0001234"
+                    value={formData.ifscCode}
+                    maxLength={11}
+                    onChange={(e) => {
+                      const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                      handleFieldChange('ifscCode', value);
+                    }}
+                  />
+                  <p className="text-xs text-gray-500">11 characters (4 letters + 0 + 6 alphanumeric)</p>
+                </div>
+              )}
+
+              {selectedMethod.fields.includes('accountNumber') && (
+                <div className="space-y-2">
+                  <Label>Account Number (Optional)</Label>
+                  <Input
+                    placeholder="Enter 9-18 digit account number"
+                    value={formData.accountNumber}
+                    maxLength={18}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      handleFieldChange('accountNumber', value);
+                    }}
+                  />
+                  <p className="text-xs text-gray-500">9-18 digits</p>
+                </div>
+              )}
+
+              {selectedMethod.fields.includes('cardLast4') && (
+                <div className="space-y-2">
+                  <Label>Last 4 Digits of Card *</Label>
+                  <Input
+                    placeholder="e.g., 1234"
+                    value={formData.cardLast4}
+                    maxLength={4}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      handleFieldChange('cardLast4', value);
+                    }}
+                  />
+                  <p className="text-xs text-gray-500">Exactly 4 digits</p>
                 </div>
               )}
               
