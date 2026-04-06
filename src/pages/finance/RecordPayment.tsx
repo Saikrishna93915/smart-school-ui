@@ -1946,7 +1946,7 @@ export default function RecordPayment() {
                   type="number"
                   placeholder="0.00"
                   className="pl-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  value={formData.amount}
+                  value={formData.amount || ''}
                   onChange={(e) => {
                     const value = e.target.value;
                     handleFieldChange('amount', value === '' ? 0 : Number(value));
