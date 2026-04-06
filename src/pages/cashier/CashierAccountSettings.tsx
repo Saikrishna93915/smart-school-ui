@@ -195,11 +195,16 @@ export default function CashierAccountSettings() {
     }
 
     try {
+      // FIX: Calculate variance correctly - expected cash (from shift transactions) vs actual cash in hand
+      const expectedCash = currentShift.transactions?.cash || 0;
+      const actualCash = parseFloat(cashInHand || closingBalance);
+      const variance = expectedCash - actualCash; // positive = shortage, negative = excess
+
       await cashierService.closeShift((currentShift as ShiftSession)._id, {
         closingBalance: parseFloat(closingBalance),
-        cashInHand: parseFloat(cashInHand || closingBalance),
+        cashInHand: actualCash,
         notes: closingNotes,
-        variance: parseFloat(closingBalance) - parseFloat(cashInHand || closingBalance),
+        variance: variance,
       });
       setShowClosingDialog(false);
       setClosingBalance("");
