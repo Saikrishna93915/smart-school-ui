@@ -200,9 +200,9 @@ function validatePaymentMethodDetails(formData: PaymentFormData): string | null 
 
     case 'bank-transfer':
       if (!utrNo || utrNo.trim() === '') {
-        errors.push('UTR number is required');
-      } else if (!/^\d{12}$/.test(utrNo.trim())) {
-        errors.push('UTR number must be exactly 12 digits');
+        errors.push('Transaction reference number (UTR/RRN) is required');
+      } else if (!/^[A-Za-z0-9]{12,35}$/.test(utrNo.trim())) {
+        errors.push('Reference number must be 12-35 alphanumeric characters');
       }
 
       if (!bankName || bankName.trim() === '') {
@@ -1825,17 +1825,17 @@ export default function RecordPayment() {
               
               {selectedMethod.fields.includes('utrNo') && (
                 <div className="space-y-2">
-                  <Label>UTR Number *</Label>
+                  <Label>Transaction Reference Number (UTR/RRN) *</Label>
                   <Input
-                    placeholder="Enter 12-digit UTR number"
+                    placeholder="Enter 12-35 digit/char reference"
                     value={formData.utrNo}
-                    maxLength={12}
+                    maxLength={35}
                     onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, '');
+                      const value = e.target.value.replace(/[^A-Za-z0-9]/g, '');
                       handleFieldChange('utrNo', value);
                     }}
                   />
-                  <p className="text-xs text-gray-500">Exactly 12 digits required</p>
+                  <p className="text-xs text-gray-500">12-35 characters. UPI/IMPS: 12 digits | NEFT: 16 chars | RTGS: 22 chars | PhonePe/GPay: 20-35 chars</p>
                 </div>
               )}
               
