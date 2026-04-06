@@ -51,24 +51,6 @@ import {
 import { toast } from "sonner";
 import { cashierService } from "@/Services/cashierService";
 import { format, parseISO, subDays } from "date-fns";
-
-// Helper: Convert UTC date to IST (UTC+5:30) for Indian timezone
-const toIST = (date: Date): Date => {
-  // IST is UTC + 5 hours 30 minutes
-  const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
-  return new Date(date.getTime() + istOffset);
-};
-
-// Helper: Parse ISO string and convert to IST safely
-const parseToIST = (dateString: string | null | undefined): Date | null => {
-  if (!dateString) return null;
-  try {
-    const utcDate = parseISO(dateString);
-    return toIST(utcDate);
-  } catch {
-    return null;
-  }
-};
 import {
   IndianRupee,
   Receipt,
@@ -204,9 +186,8 @@ const formatCurrency = (amount: number): string => {
 const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'N/A';
   try {
-    const istDate = parseToIST(dateString);
-    if (!istDate) return 'Invalid Date';
-    return format(istDate, "dd MMM yyyy");
+    const date = new Date(dateString);
+    return format(date, "dd MMM yyyy");
   } catch {
     return 'Invalid Date';
   }
@@ -215,9 +196,8 @@ const formatDate = (dateString: string | null | undefined): string => {
 const formatDateTime = (dateString: string | null | undefined): string => {
   if (!dateString) return 'N/A';
   try {
-    const istDate = parseToIST(dateString);
-    if (!istDate) return 'N/A';
-    return format(istDate, "dd MMM yyyy, hh:mm a");
+    const date = new Date(dateString);
+    return format(date, "dd MMM yyyy, hh:mm a");
   } catch {
     return 'N/A';
   }
@@ -226,9 +206,8 @@ const formatDateTime = (dateString: string | null | undefined): string => {
 const formatTime = (dateString: string | null | undefined): string => {
   if (!dateString) return 'N/A';
   try {
-    const istDate = parseToIST(dateString);
-    if (!istDate) return 'N/A';
-    return format(istDate, "hh:mm a");
+    const date = new Date(dateString);
+    return format(date, "hh:mm a");
   } catch {
     return 'N/A';
   }
@@ -296,15 +275,11 @@ const SCHOOL_ADDRESS = import.meta.env.VITE_SCHOOL_ADDRESS || "Hosur - Krishnagi
 
 export default function DailyCollectionReport() {
   const navigate = useNavigate();
-  // Initialize with today's date in IST (not UTC)
-  const getTodayIST = (): string => {
-    const now = new Date();
-    // Add 5.5 hours to get IST
-    const istDate = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-    return format(istDate, "yyyy-MM-dd");
-  };
 
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayIST());
+  // Initialize with today's date (backend now returns IST-aware dates)
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
