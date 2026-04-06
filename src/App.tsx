@@ -137,23 +137,36 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Role-based Route Component
-const RoleBasedRoute = ({ 
-  children, 
-  allowedRoles 
-}: { 
-  children?: React.ReactNode; 
-  allowedRoles: string[] 
+const RoleBasedRoute = ({
+  children,
+  allowedRoles
+}: {
+  children?: React.ReactNode;
+  allowedRoles: string[]
 }) => {
   const { user, isLoading } = useAuth();
-  
+
   if (isLoading) {
     return <LoadingSpinner />;
   }
-  
+
   if (!user || !allowedRoles.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+    // Redirect to user's role-specific dashboard instead of generic /dashboard
+    const roleDashboards: Record<string, string> = {
+      admin: '/dashboard/admin',
+      owner: '/dashboard',
+      teacher: '/dashboard/teacher',
+      student: '/dashboard/student',
+      parent: '/dashboard',
+      accountant: '/finance/collections',
+      cashier: '/cashier/dashboard',
+      principal: '/principal/dashboard',
+      driver: '/driver/dashboard',
+    };
+    const redirectPath = user ? roleDashboards[user.role] || '/login' : '/login';
+    return <Navigate to={redirectPath} replace />;
   }
-  
+
   // If children are provided render them, otherwise render nested routes via Outlet
   return <>{children ?? <Outlet />}</>;
 };
