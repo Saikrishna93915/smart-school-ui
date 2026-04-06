@@ -373,8 +373,13 @@ export default function DailyCollectionReport() {
   };
 
   const handleViewTransaction = (transaction: Transaction) => {
-    setSelectedTransaction(transaction);
-    setShowTransactionDialog(true);
+    try {
+      setSelectedTransaction(transaction);
+      setShowTransactionDialog(true);
+    } catch (error) {
+      console.error('Error opening transaction dialog:', error);
+      toast.error('Failed to open transaction details');
+    }
   };
 
   const handleExportCSV = () => {
@@ -1113,97 +1118,120 @@ export default function DailyCollectionReport() {
 
   // ==================== DIALOG RENDER FUNCTIONS ====================
 
-  const renderTransactionDialog = () => (
-    <Dialog open={showTransactionDialog} onOpenChange={setShowTransactionDialog}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Transaction Details</DialogTitle>
-        </DialogHeader>
-        {selectedTransaction && (
-          <div className="space-y-4 py-4">
-            <div className="border rounded-lg p-4 bg-gray-50">
-              <div className="flex justify-between items-center mb-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Receipt Number</p>
-                  <p className="font-mono font-bold">{selectedTransaction.receiptNumber}</p>
-                </div>
-                <Badge className={getPaymentMethodColor(selectedTransaction.paymentMethod)}>
-                  {getPaymentMethodLabel(selectedTransaction.paymentMethod)}
-                </Badge>
-              </div>
+  const renderTransactionDialog = () => {
+    if (!selectedTransaction) return null;
 
-              <Separator className="my-3" />
+    try {
+      const tx = selectedTransaction;
+      const method = tx.paymentMethod || 'cash';
+      const firstName = tx.studentId?.personal?.firstName || '';
+      const lastName = tx.studentId?.personal?.lastName || '';
+      const className = tx.studentId?.academic?.class || '';
+      const section = tx.studentId?.academic?.section || '';
+      const admissionNo = tx.studentId?.academic?.admissionNumber || '';
+      const receivedByName = tx.receivedBy?.name || '-';
+      const dateTime = tx.createdAt ? formatDateTime(tx.createdAt) : 'N/A';
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Student Name</p>
-                  <p className="font-medium">
-                    {selectedTransaction.studentId?.personal?.firstName || ""}{" "}
-                    {selectedTransaction.studentId?.personal?.lastName || ""}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Class</p>
-                  <p className="font-medium">
-                    {selectedTransaction.studentId?.academic?.class || ""}-
-                    {selectedTransaction.studentId?.academic?.section || ""}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Admission No</p>
-                  <p className="font-medium">{selectedTransaction.studentId?.academic?.admissionNumber || ""}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Amount</p>
-                  <p className="font-bold text-green-600">
-                    {formatCurrency(selectedTransaction.amount)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Date & Time</p>
-                  <p className="font-medium">{formatDateTime(selectedTransaction.createdAt)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Received By</p>
-                  <p className="font-medium">{selectedTransaction.receivedBy?.name || "-"}</p>
-                </div>
-              </div>
-
-              {selectedTransaction.feeType && selectedTransaction.feeType.length > 0 && (
-                <>
-                  <Separator className="my-3" />
-                  <p className="text-xs text-muted-foreground mb-2">Fee Breakdown</p>
-                  <div className="space-y-1">
-                    {selectedTransaction.feeType.map((fee, index) => (
-                      <div key={index} className="flex justify-between text-sm">
-                        <span>{fee.name}</span>
-                        <span className="font-medium">{formatCurrency(fee.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {selectedTransaction.remarks && (
-                <>
-                  <Separator className="my-3" />
+      return (
+        <Dialog open={showTransactionDialog} onOpenChange={setShowTransactionDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Transaction Details</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <div className="flex justify-between items-center mb-3">
                   <div>
-                    <p className="text-xs text-muted-foreground">Remarks</p>
-                    <p className="text-sm mt-1">{selectedTransaction.remarks}</p>
+                    <p className="text-xs text-muted-foreground">Receipt Number</p>
+                    <p className="font-mono font-bold">{tx.receiptNumber || 'N/A'}</p>
                   </div>
-                </>
-              )}
+                  <Badge className={getPaymentMethodColor(method)}>
+                    {getPaymentMethodLabel(method)}
+                  </Badge>
+                </div>
+
+                <Separator className="my-3" />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Student Name</p>
+                    <p className="font-medium">{firstName} {lastName}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Class</p>
+                    <p className="font-medium">{className}-{section}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Admission No</p>
+                    <p className="font-medium">{admissionNo}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Amount</p>
+                    <p className="font-bold text-green-600">{formatCurrency(tx.amount || 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Date & Time</p>
+                    <p className="font-medium">{dateTime}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Received By</p>
+                    <p className="font-medium">{receivedByName}</p>
+                  </div>
+                </div>
+
+                {tx.feeType && tx.feeType.length > 0 && (
+                  <>
+                    <Separator className="my-3" />
+                    <p className="text-xs text-muted-foreground mb-2">Fee Breakdown</p>
+                    <div className="space-y-1">
+                      {tx.feeType.map((fee, index) => (
+                        <div key={index} className="flex justify-between text-sm">
+                          <span>{fee.name}</span>
+                          <span className="font-medium">{formatCurrency(fee.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {tx.remarks && (
+                  <>
+                    <Separator className="my-3" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Remarks</p>
+                      <p className="text-sm mt-1">{tx.remarks}</p>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setShowTransactionDialog(false)}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowTransactionDialog(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      );
+    } catch (error) {
+      console.error('Error rendering transaction dialog:', error);
+      return (
+        <Dialog open={showTransactionDialog} onOpenChange={setShowTransactionDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Error</DialogTitle>
+            </DialogHeader>
+            <p>Failed to load transaction details.</p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowTransactionDialog(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      );
+    }
+  };
 
   const renderExportDialog = () => (
     <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
