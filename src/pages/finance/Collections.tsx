@@ -140,11 +140,14 @@ const Collections = () => {
   const [monthlyTrend, setMonthlyTrend] = useState<any[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<any[]>([]);
 
-  // Filter options
-  const classOptions = ['All Classes', '9-A', '9-B', '10-A', '10-B', '11-A', '11-B', '12-A', '12-B'];
+  // Filter options - dynamically build class options from actual data
   const statusOptions = ['All Status', 'completed', 'pending', 'failed'];
   const paymentMethodOptions = ['All Methods', 'cash', 'UPI', 'card', 'cheque', 'bank_transfer', 'online'];
   const statusUpdateOptions = ['completed', 'pending', 'failed', 'cancelled', 'refunded'];
+
+  // Extract unique class names from loaded collections
+  const uniqueClasses = Array.from(new Set(collections.map(c => c.className).filter(Boolean))).sort();
+  const dynamicClassOptions = ['All Classes', ...uniqueClasses];
 
   // Load collections data
   const loadCollections = async () => {
@@ -735,7 +738,7 @@ const Collections = () => {
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    {classOptions.map((cls) => (
+                    {dynamicClassOptions.map((cls) => (
                       <SelectItem key={cls} value={cls}>{cls}</SelectItem>
                     ))}
                   </SelectContent>
