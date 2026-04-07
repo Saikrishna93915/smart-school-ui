@@ -54,11 +54,11 @@ export function AttendanceChart({ data = [], loading = false, className }: Atten
 
   return (
     <Card className={cn('animate-fade-in', className)}>
-      <CardHeader className="pb-1">
+      <CardHeader className="pb-0">
         <CardTitle className="text-lg">Weekly Attendance</CardTitle>
       </CardHeader>
       <CardContent className="pt-0 pb-0">
-        <div className="h-[150px]">
+        <div className="h-[140px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
