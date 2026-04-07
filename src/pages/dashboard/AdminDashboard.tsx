@@ -455,7 +455,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid gap-6 lg:grid-cols-2 items-start">
+      <div className="grid gap-6 lg:grid-cols-2">
         <AttendanceChart
           data={chartData.attendance}
           loading={loading}
