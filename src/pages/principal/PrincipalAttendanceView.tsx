@@ -676,7 +676,7 @@ export default function PrincipalAttendanceView() {
   };
 
   const renderWeeklyTrend = () => {
-    if (!data?.weeklyAttendance) return null;
+    if (!data?.weeklyAttendance || data.weeklyAttendance.length === 0) return null;
 
     const maxPercentage = Math.max(...data.weeklyAttendance.map((d) => d.percentage), 1);
 

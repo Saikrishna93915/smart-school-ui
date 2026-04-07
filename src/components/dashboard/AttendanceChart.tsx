@@ -26,13 +26,19 @@ interface AttendanceChartProps {
 
 export function AttendanceChart({ data = [], loading = false, className }: AttendanceChartProps) {
   // Format data for chart - use date as name if available
-  const chartData = data.length > 0 
+  const chartData = data.length > 0
     ? data.slice(-7).map(item => ({
         name: item._id || 'N/A',
         present: item.present || 0,
         absent: item.absent || 0,
       }))
     : defaultAttendanceData;
+
+  // If no data at all, don't render the chart to avoid whitespace
+  if (!loading && data.length === 0) {
+    return null;
+  }
+
   if (loading) {
     return (
       <Card className={cn('animate-fade-in', className)}>
