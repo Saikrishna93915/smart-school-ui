@@ -210,12 +210,29 @@ export const collectionsService = {
         headers: getAuthHeaders(),
       }
     );
-    
+
     if (!response.ok) {
       throw new Error(`API Error: ${response.status} ${response.statusText}`);
     }
-    
+
     return response.json();
+  },
+
+  // CRITICAL: Get unique class names for filter dropdown
+  getCollectionClasses: async (): Promise<string[]> => {
+    const response = await fetch(
+      `${API_BASE_URL}/finance/collections/classes`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.data?.classes || [];
   },
 
   // Download receipt

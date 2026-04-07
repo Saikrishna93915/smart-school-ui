@@ -139,22 +139,28 @@ const Collections = () => {
   });
   const [monthlyTrend, setMonthlyTrend] = useState<any[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<any[]>([]);
+  const [availableClasses, setAvailableClasses] = useState<string[]>([]);
 
   // Filter options - STANDARDIZED values that match backend expectations
   const statusOptions = ['All Status', 'completed', 'pending', 'failed'];
   const paymentMethodOptions = ['All Methods', 'cash', 'upi', 'card', 'cheque', 'bank_transfer', 'online'];
   const statusUpdateOptions = ['completed', 'pending', 'failed', 'cancelled', 'refunded'];
-  
-  // CRITICAL: Normalize class options - trim whitespace and ensure consistent casing
-  const uniqueClasses = Array.from(
-    new Set(
-      collections
-        .map(c => c.className?.trim())
-        .filter(Boolean)
-    )
-  ).sort((a, b) => a.localeCompare(b));
-  
-  const dynamicClassOptions = ['All Classes', ...uniqueClasses];
+
+  // CRITICAL: Class options come from API, not from filtered data
+  const dynamicClassOptions = ['All Classes', ...availableClasses];
+
+  // CRITICAL: Fetch unique class names from backend on mount
+  useEffect(() => {
+    const fetchClasses = async () => {
+      try {
+        const classes = await collectionsService.getCollectionClasses();
+        setAvailableClasses(classes);
+      } catch (error) {
+        console.error('Error fetching classes:', error);
+      }
+    };
+    fetchClasses();
+  }, []);
 
   // Load collections data
   const loadCollections = async () => {
@@ -535,9 +541,11 @@ const Collections = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  // Filter collections
+  // Filter collections - CRITICAL: Only do client-side search, NOT class/status/method
+  // because those are already filtered by the backend API
   const filteredCollections = collections.filter(collection => {
-    const matchesSearch = 
+    // Only search filter - class/status/method are handled by backend
+    const matchesSearch =
       searchTerm === '' ||
       (collection.studentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (collection.studentId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -545,13 +553,8 @@ const Collections = () => {
       (collection.parentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (collection.className || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (collection.admissionNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesClass = selectedClass === 'All Classes' || collection.className === selectedClass;
-    const matchesStatus = selectedStatus === 'All Status' || collection.status === selectedStatus;
-    const matchesMethod = paymentMethodFilter === 'All Methods' || 
-                         collection.paymentMethod.toLowerCase() === paymentMethodFilter.toLowerCase();
-    
-    return matchesSearch && matchesClass && matchesStatus && matchesMethod;
+
+    return matchesSearch;
   });
 
   return (
