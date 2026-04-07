@@ -620,8 +620,9 @@ const PaymentHistoryPage = () => {
   // Format date time
   const formatDateTime = (dateInput: string | Date): string => {
     try {
+      if (!dateInput) return 'N/A';
       const d = new Date(dateInput);
-      if (isNaN(d.getTime())) return 'Invalid Date';
+      if (isNaN(d.getTime())) return 'N/A';
       // Force IST (Indian Standard Time) - UTC+5:30
       return d.toLocaleString('en-IN', {
         year: 'numeric',
@@ -632,7 +633,7 @@ const PaymentHistoryPage = () => {
         timeZone: 'Asia/Kolkata'
       });
     } catch (error) {
-      return 'Invalid Date';
+      return 'N/A';
     }
   };
   

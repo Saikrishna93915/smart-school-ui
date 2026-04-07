@@ -450,7 +450,9 @@ const Collections = () => {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-IN', {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
@@ -503,10 +505,12 @@ const Collections = () => {
   const filteredCollections = collections.filter(collection => {
     const matchesSearch = 
       searchTerm === '' ||
-      collection.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      collection.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      collection.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      collection.parentName.toLowerCase().includes(searchTerm.toLowerCase());
+      (collection.studentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.studentId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.receiptNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.parentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.className || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.admissionNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesClass = selectedClass === 'All Classes' || collection.className === selectedClass;
     const matchesStatus = selectedStatus === 'All Status' || collection.status === selectedStatus;
