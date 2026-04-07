@@ -58,7 +58,7 @@ export function AttendanceChart({ data = [], loading = false, className }: Atten
         <CardTitle className="text-lg">Weekly Attendance</CardTitle>
       </CardHeader>
       <CardContent className="pt-0 pb-2">
-        <div className="h-[200px]">
+        <div className="h-[180px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
