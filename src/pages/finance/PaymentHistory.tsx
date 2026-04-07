@@ -605,16 +605,26 @@ const PaymentHistoryPage = () => {
   useEffect(() => {
     fetchPaymentHistory();
     fetchStatistics();
-    
+
     // Set default date range to last 30 days
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
-    
+
     setDateRange({
       start: startDate.toISOString().split('T')[0],
       end: endDate.toISOString().split('T')[0]
     });
+  }, []);
+
+  // CRITICAL: Refresh payment history when window gets focus (user returns from recording payment)
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchPaymentHistory(1);
+      fetchStatistics();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
   
   // Format date time
@@ -1173,7 +1183,8 @@ const PaymentHistoryPage = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="text-sm">{formatDateTime(payment.paymentDate)}</div>
+                          {/* CRITICAL: Show createdAt (when recorded) not paymentDate (which can be backdated) */}
+                          <div className="text-sm">{formatDateTime(payment.createdAt || payment.paymentDate)}</div>
                           <div className="text-xs text-muted-foreground truncate max-w-[150px]">
                             by {payment.recordedByName}
                           </div>
@@ -1373,9 +1384,10 @@ const PaymentHistoryPage = () => {
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Date & Time</p>
+                      <p className="text-sm text-muted-foreground">Recorded At</p>
+                      {/* CRITICAL: Show createdAt (when recorded) not paymentDate */}
                       <p className="font-medium">
-                        {formatDateTime(selectedPayment.paymentDate)}
+                        {formatDateTime(selectedPayment.createdAt || selectedPayment.paymentDate)}
                       </p>
                     </div>
                     <div>

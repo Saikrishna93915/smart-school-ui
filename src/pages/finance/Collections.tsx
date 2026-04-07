@@ -468,10 +468,28 @@ const Collections = () => {
     if (!dateString) return 'N/A';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return 'N/A';
+    // CRITICAL: Display in IST timezone for Indian users
     return d.toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    });
+  };
+
+  // CRITICAL: Format datetime with IST timezone
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
     });
   };
 
@@ -846,7 +864,8 @@ const Collections = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{formatDate(collection.paymentDate)}</div>
+                        {/* CRITICAL: Show createdAt (when recorded) not paymentDate (which can be backdated) */}
+                        <div className="text-sm">{formatDateTime(collection.createdAt || collection.paymentDate)}</div>
                         <div className="text-xs text-muted-foreground">{collection.collectedBy}</div>
                       </TableCell>
                       <TableCell>{getStatusBadge(collection.status)}</TableCell>
@@ -945,7 +964,8 @@ const Collections = () => {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Date:</span>
-                        <span>{formatDate(collection.paymentDate)}</span>
+                        {/* CRITICAL: Show createdAt (when recorded) not paymentDate */}
+                        <span>{formatDateTime(collection.createdAt || collection.paymentDate)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Collected by:</span>
@@ -1079,7 +1099,8 @@ const Collections = () => {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Date</p>
-                    <p className="font-medium">{formatDate(selectedCollection.paymentDate)}</p>
+                    {/* CRITICAL: Show createdAt (when recorded) not paymentDate */}
+                    <p className="font-medium">{formatDateTime(selectedCollection.createdAt || selectedCollection.paymentDate)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Collected By</p>
@@ -1102,8 +1123,9 @@ const Collections = () => {
                     <p className="font-bold text-lg text-green-600">{formatCurrency(selectedCollection.amount)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Payment Date</p>
-                    <p className="font-medium text-sm">{formatDate(selectedCollection.paymentDate)}</p>
+                    <p className="text-xs text-muted-foreground">Recorded At</p>
+                    {/* CRITICAL: Show createdAt (when recorded) not paymentDate */}
+                    <p className="font-medium text-sm">{formatDateTime(selectedCollection.createdAt || selectedCollection.paymentDate)}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
