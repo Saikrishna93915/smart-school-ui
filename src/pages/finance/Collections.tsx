@@ -140,13 +140,20 @@ const Collections = () => {
   const [monthlyTrend, setMonthlyTrend] = useState<any[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<any[]>([]);
 
-  // Filter options - dynamically build class options from actual data
+  // Filter options - STANDARDIZED values that match backend expectations
   const statusOptions = ['All Status', 'completed', 'pending', 'failed'];
-  const paymentMethodOptions = ['All Methods', 'cash', 'UPI', 'card', 'cheque', 'bank_transfer', 'online'];
+  const paymentMethodOptions = ['All Methods', 'cash', 'upi', 'card', 'cheque', 'bank_transfer', 'online'];
   const statusUpdateOptions = ['completed', 'pending', 'failed', 'cancelled', 'refunded'];
-
-  // Extract unique class names from loaded collections
-  const uniqueClasses = Array.from(new Set(collections.map(c => c.className).filter(Boolean))).sort();
+  
+  // CRITICAL: Normalize class options - trim whitespace and ensure consistent casing
+  const uniqueClasses = Array.from(
+    new Set(
+      collections
+        .map(c => c.className?.trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+  
   const dynamicClassOptions = ['All Classes', ...uniqueClasses];
 
   // Load collections data
@@ -154,10 +161,13 @@ const Collections = () => {
     setLoading(true);
     try {
       const params: any = {
-        search: searchTerm || undefined,
+        search: searchTerm?.trim() || undefined,
+        // CRITICAL: Send exact class value as stored in DB
         className: selectedClass !== 'All Classes' ? selectedClass : undefined,
-        status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
-        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter : undefined,
+        // CRITICAL: Send status in lowercase
+        status: selectedStatus !== 'All Status' ? selectedStatus.toLowerCase() : undefined,
+        // CRITICAL: Send payment method in lowercase with underscores normalized
+        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter.toLowerCase() : undefined,
         page: 1,
         limit: 50
       };
@@ -237,10 +247,13 @@ const Collections = () => {
     setExportLoading(true);
     try {
       const params: any = {
-        search: searchTerm || undefined,
+        search: searchTerm?.trim() || undefined,
+        // CRITICAL: Send exact class value as stored in DB
         className: selectedClass !== 'All Classes' ? selectedClass : undefined,
-        status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
-        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter : undefined,
+        // CRITICAL: Send status in lowercase
+        status: selectedStatus !== 'All Status' ? selectedStatus.toLowerCase() : undefined,
+        // CRITICAL: Send payment method in lowercase
+        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter.toLowerCase() : undefined,
       };
 
       const blob = await collectionsService.exportCollections(params);
