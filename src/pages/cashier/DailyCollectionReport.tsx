@@ -363,7 +363,11 @@ export default function DailyCollectionReport() {
 
   const handleNextDay = () => {
     const nextDate = subDays(parseISO(selectedDate), -1);
-    if (nextDate <= new Date()) {
+    // CRITICAL: Compare dates only (not time) to allow navigation until today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    nextDate.setHours(0, 0, 0, 0);
+    if (nextDate <= today) {
       setSelectedDate(format(nextDate, "yyyy-MM-dd"));
     }
   };
