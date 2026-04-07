@@ -198,7 +198,13 @@ const formatTime = (dateString: string | Date | null | undefined): string => {
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return "-";
-    return format(date, "hh:mm a");
+    // CRITICAL: Display in IST timezone for Indian users
+    return date.toLocaleString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
   } catch {
     return "-";
   }
@@ -209,7 +215,13 @@ const formatDate = (dateString: string | Date | null | undefined): string => {
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return "-";
-    return format(date, "dd MMM yyyy");
+    // CRITICAL: Display in IST timezone for Indian users
+    return date.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    });
   } catch {
     return "-";
   }
@@ -385,6 +397,15 @@ export default function CashierDashboard() {
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
+  }, [loadDashboardData]);
+
+  // CRITICAL: Refresh dashboard when window gets focus (user returns from collecting fees)
+  useEffect(() => {
+    const handleFocus = () => {
+      loadDashboardData(true); // refresh with loading indicator
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [loadDashboardData]);
 
   // ==================== FILTERED TRANSACTIONS ====================
@@ -1006,8 +1027,9 @@ export default function CashierDashboard() {
                           <TableCell>{getStatusBadge(tx.status)}</TableCell>
                           <TableCell>
                             <div className="text-sm">
-                              <p>{formatTime(tx.paymentDate || tx.createdAt)}</p>
-                              <p className="text-xs text-muted-foreground">{formatDate(tx.paymentDate || tx.createdAt)}</p>
+                              {/* CRITICAL: Show createdAt (when recorded) not paymentDate (which can be backdated) */}
+                              <p>{formatTime(tx.createdAt || tx.paymentDate)}</p>
+                              <p className="text-xs text-muted-foreground">{formatDate(tx.createdAt || tx.paymentDate)}</p>
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
