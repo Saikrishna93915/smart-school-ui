@@ -845,6 +845,7 @@ export default function RecordPayment() {
       if (checked) {
         updatedFees.push(fee);
       } else {
+        // Remove fee if it matches (keep fees where ALL identifiers differ)
         updatedFees = updatedFees.filter(f => f.id !== fee.id && f.type !== (fee.type || fee.name) && f.name !== (fee.type || fee.name));
       }
       

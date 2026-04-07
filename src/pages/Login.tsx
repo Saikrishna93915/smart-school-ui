@@ -191,24 +191,6 @@ export default function Login() {
                 className="h-14 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-all text-lg font-bold"
                 required
               />
-              {selectedRole === "parent" && (
-                <p className="text-xs text-slate-400 mt-1">💡 Default password: Parent@123</p>
-              )}
-              {selectedRole === "teacher" && (
-                <p className="text-xs text-slate-400 mt-1">💡 Default password: Teacher@123</p>
-              )}
-              {selectedRole === "student" && (
-                <p className="text-xs text-slate-400 mt-1">💡 Default password: Student@123</p>
-              )}
-              {selectedRole === "cashier" && (
-                <p className="text-xs text-slate-400 mt-1">💡 Default password: Cashier@123</p>
-              )}
-              {selectedRole === "principal" && (
-                <p className="text-xs text-slate-400 mt-1">💡 Default password: Principal@123</p>
-              )}
-              {selectedRole === "driver" && (
-                <p className="text-xs text-slate-400 mt-1">💡 Default password: Driver@123</p>
-              )}
             </div>
 
             {/* PASSWORD */}
