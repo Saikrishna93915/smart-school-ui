@@ -18,9 +18,9 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { 
-    Search, Plus, Filter, Download, MoreVertical, Eye, Edit, Trash2, Bus, CreditCard, UserCheck, 
-    User, MapPin, Printer, FileText, Loader2, RefreshCw, XCircle
+import {
+    Search, Plus, Filter, Download, MoreVertical, Eye, Edit, Trash2, Bus, CreditCard, UserCheck,
+    User, MapPin, Printer, FileText, Loader2, RefreshCw, XCircle, CheckCircle
 } from 'lucide-react';
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -115,34 +115,61 @@ const handlePrint = (tableId: string, title: string) => {
         return;
     }
 
-    const originalBody = document.body.innerHTML;
+    // Check if table has content
+    const rows = tableToPrint.querySelectorAll('tbody tr');
+    if (!rows || rows.length === 0) {
+        alert('No student data available to print');
+        return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert('Please allow pop-ups for printing');
+        return;
+    }
 
     const printContent = `
+        <!DOCTYPE html>
         <html>
             <head>
                 <title>${title}</title>
                 <style>
-                    body { font-family: Arial, sans-serif; margin: 20px; }
-                    h1 { margin-bottom: 20px; font-size: 1.5em; }
-                    table { width: 100%; border-collapse: collapse; }
-                    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 0.85em; }
-                    th { background-color: #f0f0f0; }
+                    @page { size: landscape; margin: 15mm; }
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 15px; font-size: 11px; }
+                    h1 { margin: 0 0 10px 0; font-size: 18px; text-align: center; }
+                    .print-date { font-size: 10px; color: #666; text-align: right; margin-bottom: 10px; }
+                    table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+                    thead { display: table-header-group; }
+                    tr { page-break-inside: avoid; }
+                    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+                    th { background-color: #f0f0f0; font-weight: bold; font-size: 10px; }
+                    td { font-size: 10px; }
+                    .status-active { color: #22c55e; font-weight: bold; }
+                    .status-inactive { color: #ef4444; font-weight: bold; }
+                    .status-at-risk { color: #f59e0b; font-weight: bold; }
+                    @media print {
+                        body { padding: 0; }
+                        h1 { font-size: 16px; }
+                    }
                 </style>
             </head>
             <body>
                 <h1>${title}</h1>
+                <p class="print-date">Printed: ${new Date().toLocaleString('en-IN')}</p>
                 ${tableToPrint.outerHTML}
             </body>
         </html>
     `;
 
-    document.body.innerHTML = printContent;
+    printWindow.document.write(printContent);
+    printWindow.document.close();
     
-    window.print();
-    
-    document.body.innerHTML = originalBody;
-    
-    window.location.reload(); 
+    // Wait for content to load then print
+    printWindow.onload = () => {
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+    };
 };
 
 
@@ -754,7 +781,54 @@ const AddEditStudentModal: React.FC<AddEditModalProps> = ({
     const handleSubmit = async () => {
         setIsSubmitting(true);
         setFeeError(null);
-        
+
+        // CRITICAL: Validate required fields
+        const requiredFields = [
+            { key: 'firstName', label: 'First Name' },
+            { key: 'lastName', label: 'Last Name' },
+            { key: 'className', label: 'Class' },
+            { key: 'section', label: 'Section' },
+            { key: 'fatherName', label: 'Father Name' },
+            { key: 'fatherPhone', label: 'Father Phone' },
+        ];
+
+        for (const field of requiredFields) {
+            if (!formData[field.key as keyof typeof formData] || (formData[field.key as keyof typeof formData] as string).trim() === '') {
+                toast.error('Validation Error', {
+                    description: `${field.label} is required`
+                });
+                setIsSubmitting(false);
+                return;
+            }
+        }
+
+        // Validate phone format
+        const phoneRegex = /^[\d\s\-\+\(\)]{10,15}$/;
+        if (!phoneRegex.test(formData.fatherPhone)) {
+            toast.error('Validation Error', {
+                description: 'Please enter a valid phone number (10-15 digits)'
+            });
+            setIsSubmitting(false);
+            return;
+        }
+
+        if (formData.motherPhone && !phoneRegex.test(formData.motherPhone)) {
+            toast.error('Validation Error', {
+                description: 'Please enter a valid mother phone number'
+            });
+            setIsSubmitting(false);
+            return;
+        }
+
+        // Validate PIN code
+        if (formData.pincode && !/^\d{6}$/.test(formData.pincode)) {
+            toast.error('Validation Error', {
+                description: 'Please enter a valid 6-digit PIN code'
+            });
+            setIsSubmitting(false);
+            return;
+        }
+
         // Validate passwords for new students
         if (!isEditMode) {
             if (!formData.password || !formData.confirmPassword) {
@@ -1462,6 +1536,12 @@ export default function Students() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null); // Holds data for editing
 
+    // Bulk Import States
+    const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+    const [bulkImportFile, setBulkImportFile] = useState<File | null>(null);
+    const [isImporting, setIsImporting] = useState(false);
+    const [importResults, setImportResults] = useState<any>(null);
+
     // 1. DATA FETCHING LOGIC
     const fetchStudents = async () => {
         setIsLoading(true);
@@ -1547,39 +1627,41 @@ export default function Students() {
         };
     }, [students]);
 
-    // 5. FILTERING LOGIC (Client-Side - Re-written for separate class/section)
+    // 5. FILTERING LOGIC (Client-Side - Fixed class mapping)
     const filteredStudents = useMemo(() => {
         return students.filter((student) => {
             const fullName = `${student.student.firstName} ${student.student.lastName}`.toLowerCase();
-            
-            const matchesSearch = 
-                searchQuery.length === 0 || 
-                fullName.includes(searchQuery.toLowerCase()) ||
-                student.admissionNumber.toLowerCase().includes(searchQuery.toLowerCase());
 
-            // Database stores className as "10", "9", "LKG", "UKG", etc. (not "10th Class")
-            // So compare directly without transformation
-            const matchesClass = selectedClass === 'all' || student.class.className === selectedClass;
+            const matchesSearch =
+                searchQuery.length === 0 ||
+                fullName.includes(searchQuery.toLowerCase()) ||
+                student.admissionNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (student.student.phone && student.student.phone.includes(searchQuery)) ||
+                (student.parents.father.phone && student.parents.father.phone.includes(searchQuery));
+
+            // FIXED: Map display class (1, 2, 10...) to backend class (1st Class, 2nd Class, 10th Class...)
+            const backendClass = classNumberMap[selectedClass] || selectedClass;
+            const matchesClass = selectedClass === 'all' || student.class.className === backendClass;
             const matchesSection = selectedSection === 'all' || student.class.section === selectedSection;
             const matchesStatus = selectedStatus === 'all' || student.status === selectedStatus;
-            
+
             const matchesClassAndSection = matchesClass && matchesSection;
-            
+
             const normalizedTransport = normalizeTransportValue(student.transport);
 
-            const matchesTransport = 
-                otherFilters.transport === 'all' || 
+            const matchesTransport =
+                otherFilters.transport === 'all' ||
                 normalizedTransport === otherFilters.transport;
-                
-            const matchesFee = 
-                otherFilters.feeStatus === 'all' || 
+
+            const matchesFee =
+                otherFilters.feeStatus === 'all' ||
                 student.feeStatus === otherFilters.feeStatus;
-                
-            const matchesAttendance = 
-                otherFilters.attendance === 'all' || 
+
+            const matchesAttendance =
+                otherFilters.attendance === 'all' ||
                 (otherFilters.attendance === 'high' && (student.attendance ?? 0) >= 90) ||
                 (otherFilters.attendance === 'low' && (student.attendance ?? 0) < 75);
-                
+
             return matchesSearch && matchesClassAndSection && matchesStatus && matchesTransport && matchesFee && matchesAttendance;
         });
     }, [students, searchQuery, selectedClass, selectedSection, selectedStatus, otherFilters]);
@@ -1596,6 +1678,135 @@ export default function Students() {
             attendance: 'all',
         });
     }, []);
+
+    // 7. BULK IMPORT HANDLERS
+    const handleBulkImport = async () => {
+        if (!bulkImportFile) {
+            toast.error('Please select a file to import');
+            return;
+        }
+
+        setIsImporting(true);
+        setImportResults(null);
+
+        try {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const text = e.target?.result as string;
+                    const lines = text.split('\n').filter(line => line.trim());
+
+                    if (lines.length < 2) {
+                        toast.error('File must have at least a header row and one data row');
+                        setIsImporting(false);
+                        return;
+                    }
+
+                    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                    const requiredHeaders = ['firstname', 'classname', 'section', 'fathername', 'fatherphone'];
+                    const missingHeaders = requiredHeaders.filter(rh => !headers.includes(rh));
+
+                    if (missingHeaders.length > 0) {
+                        toast.error(`Missing required columns: ${missingHeaders.join(', ')}`);
+                        setIsImporting(false);
+                        return;
+                    }
+
+                    const students = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const values = lines[i].split(',').map(v => v.trim());
+                        const student: any = {};
+                        headers.forEach((header, index) => {
+                            student[header] = values[index] || '';
+                        });
+
+                        // Map headers to expected format
+                        students.push({
+                            firstName: student.firstname || '',
+                            lastName: student.lastname || '',
+                            className: student.classname || '',
+                            section: student.section || 'A',
+                            fatherName: student.fathername || '',
+                            fatherPhone: student.fatherphone || '',
+                            fatherEmail: student.fatheremail || '',
+                            fatherOccupation: student.fatheroccupation || '',
+                            motherName: student.mothername || '',
+                            motherPhone: student.motherphone || '',
+                            motherEmail: student.motheremail || '',
+                            motherOccupation: student.motheroccupation || '',
+                            street: student.street || '',
+                            city: student.city || '',
+                            state: student.state || '',
+                            pincode: student.pincode || '',
+                            gender: student.gender || 'Male',
+                            transport: student.transport === 'yes' ? 'yes' : 'no',
+                            admissionNumber: student.admissionnumber || undefined,
+                            academicYear: student.academicyear || '2025-2026'
+                        });
+                    }
+
+                    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+                    const importApiUrl = apiBaseUrl.endsWith('/api') ? apiBaseUrl : `${apiBaseUrl}/api`;
+
+                    const response = await fetch(`${importApiUrl}/students/import`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ students })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        setImportResults(result.data);
+                        toast.success('Import Successful', {
+                            description: `Imported ${result.data.imported} students, ${result.data.failed} failed`
+                        });
+                        fetchStudents();
+                    } else {
+                        toast.error('Import Failed', {
+                            description: result.message || 'Unknown error'
+                        });
+                    }
+                } catch (error: any) {
+                    console.error('Import error:', error);
+                    toast.error('Import Failed', {
+                        description: error.message || 'Failed to process file'
+                    });
+                } finally {
+                    setIsImporting(false);
+                }
+            };
+
+            reader.onerror = () => {
+                toast.error('Failed to read file');
+                setIsImporting(false);
+            };
+
+            reader.readAsText(bulkImportFile);
+        } catch (error: any) {
+            console.error('Import error:', error);
+            toast.error('Import Failed', {
+                description: error.message || 'Failed to import students'
+            });
+            setIsImporting(false);
+        }
+    };
+
+    const downloadSampleCSV = () => {
+        const headers = 'firstname,lastname,gender,classname,section,fathername,fatherphone,fatheremail,mothername,motherphone,transport,street,city,state,pincode';
+        const sampleRow = 'John,Doe,Male,10,A,John Doe Sr,9876543210,john@example.com,Jane Doe,9876543211,no,123 Main St,City,State,123456';
+        const csvContent = `${headers}\n${sampleRow}`;
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'sample_students_import.csv';
+        link.click();
+    };
 
     // 7. EXPORT/PRINT HANDLERS
     const handleExportCSV = (exportType: 'filtered' | 'all') => {
@@ -1771,12 +1982,101 @@ export default function Students() {
         <div className="space-y-6">
             
             {/* -------------------- ADD/EDIT MODAL -------------------- */}
-            <AddEditStudentModal 
+            <AddEditStudentModal
                 isModalOpen={isModalOpen}
                 setIsModalOpen={handleCloseModal}
-                initialStudent={selectedStudent} 
-                refreshStudents={fetchStudents} 
+                initialStudent={selectedStudent}
+                refreshStudents={fetchStudents}
             />
+            {/* -------------------------------------------------------- */}
+
+            {/* -------------------- BULK IMPORT MODAL -------------------- */}
+            <Dialog open={isBulkImportOpen} onOpenChange={setIsBulkImportOpen}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl">Bulk Import Students</DialogTitle>
+                        <DialogDescription>
+                            Import multiple students from a CSV file. Download the sample file to see the required format.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        {/* Download Sample */}
+                        <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <div>
+                                <p className="text-sm font-medium">Need a template?</p>
+                                <p className="text-xs text-muted-foreground">Download the sample CSV file with correct format</p>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={downloadSampleCSV}>
+                                <Download className="h-4 w-4 mr-2" />
+                                Sample CSV
+                            </Button>
+                        </div>
+
+                        {/* File Upload */}
+                        <div className="space-y-2">
+                            <Label htmlFor="csvFile">Upload CSV File</Label>
+                            <Input
+                                id="csvFile"
+                                type="file"
+                                accept=".csv"
+                                onChange={(e) => setBulkImportFile(e.target.files?.[0] || null)}
+                                disabled={isImporting}
+                            />
+                            {bulkImportFile && (
+                                <p className="text-xs text-muted-foreground">
+                                    Selected: {bulkImportFile.name} ({(bulkImportFile.size / 1024).toFixed(1)} KB)
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Import Results */}
+                        {importResults && (
+                            <div className="p-3 rounded-lg border">
+                                <div className="flex items-center gap-2 mb-2">
+                                    {importResults.failed === 0 ? (
+                                        <CheckCircle className="h-5 w-5 text-green-600" />
+                                    ) : (
+                                        <XCircle className="h-5 w-5 text-yellow-600" />
+                                    )}
+                                    <p className="font-medium">
+                                        Imported: {importResults.imported} | Failed: {importResults.failed}
+                                    </p>
+                                </div>
+                                {importResults.errors && importResults.errors.length > 0 && (
+                                    <div className="mt-2 max-h-40 overflow-y-auto">
+                                        <p className="text-xs font-medium mb-1">Errors:</p>
+                                        <ul className="text-xs space-y-1">
+                                            {importResults.errors.map((err: any, idx: number) => (
+                                                <li key={idx} className="text-red-600">
+                                                    Row {err.row}: {err.error}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Required Fields Info */}
+                        <div className="text-xs text-muted-foreground">
+                            <p className="font-medium mb-1">Required columns:</p>
+                            <p>firstname, classname, section, fathername, fatherphone</p>
+                            <p className="mt-1">Optional: lastname, gender, fatheremail, mothername, motherphone, transport, street, city, state, pincode</p>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsBulkImportOpen(false)} disabled={isImporting}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleBulkImport} disabled={isImporting || !bulkImportFile}>
+                            {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {importResults ? 'Import Again' : 'Import Students'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             {/* -------------------------------------------------------- */}
 
 
@@ -1786,12 +2086,24 @@ export default function Students() {
                     <h1 className="text-2xl font-bold">Student Management</h1>
                     <p className="text-muted-foreground">Manage and view all student information</p>
                 </div>
-                
-                {/* ADD STUDENT BUTTON - Now triggers the open function */}
-                <Button onClick={handleOpenAdd}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Student
-                </Button>
+
+                <div className="flex gap-2">
+                    {/* Import Students Button */}
+                    <Button variant="outline" onClick={() => {
+                        setIsBulkImportOpen(true);
+                        setBulkImportFile(null);
+                        setImportResults(null);
+                    }}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Import Students
+                    </Button>
+
+                    {/* ADD STUDENT BUTTON */}
+                    <Button onClick={handleOpenAdd}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Student
+                    </Button>
+                </div>
             </div>
 
             {/* Summary Cards */}
