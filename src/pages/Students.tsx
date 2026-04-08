@@ -110,93 +110,85 @@ const exportToCSV = (data: Student[], fileName: string) => {
 // Print function that builds HTML directly from student data
 const printStudentData = (students: Student[], title: string) => {
     if (!students || students.length === 0) {
-        alert('No student data available to print');
+        toast.error('No data to print', {
+            description: 'Please ensure students are loaded before printing'
+        });
         return;
     }
 
+    console.log('Printing', students.length, 'students');
+
     // Build table rows from data
-    const rows = students.map((student, index) => {
+    const tableRows = students.map((student, index) => {
         const feeDisplay = getFeeBalanceDisplay(student);
-        const statusClass = student.status === 'active' ? 'status-active' : student.status === 'inactive' ? 'status-inactive' : 'status-at-risk';
+        const statusColor = student.status === 'active' ? '#22c55e' : student.status === 'inactive' ? '#ef4444' : '#f59e0b';
         const transportStatus = normalizeTransportValue(student.transport) === 'yes' ? 'Enrolled' : 'Not Enrolled';
         
         return `<tr>
-            <td>${index + 1}</td>
-            <td>${student.admissionNumber || '-'}</td>
-            <td>${student.student.firstName} ${student.student.lastName || ''}</td>
-            <td>${student.class.className}</td>
-            <td>${student.class.section}</td>
-            <td>${student.parents.father.name || '-'}</td>
-            <td>${student.parents.father.phone || '-'}</td>
-            <td>${student.attendance ?? '-'}%</td>
-            <td>${feeDisplay.amount !== null ? '₹' + feeDisplay.amount.toLocaleString('en-IN') : feeDisplay.label}</td>
-            <td>${transportStatus}</td>
-            <td class="${statusClass}">${student.status}</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${index + 1}</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${student.admissionNumber || '-'}</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${student.student.firstName || ''} ${student.student.lastName || ''}</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${student.class.className || '-'}</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${student.class.section || '-'}</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${student.parents?.father?.name || '-'}</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${student.parents?.father?.phone || '-'}</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${student.attendance ?? '-'}%</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${feeDisplay.amount !== null ? 'Rs. ' + feeDisplay.amount.toLocaleString('en-IN') : feeDisplay.label}</td>
+            <td style="border:1px solid #333;padding:4px 6px;">${transportStatus}</td>
+            <td style="border:1px solid #333;padding:4px 6px;color:${statusColor};font-weight:bold;">${student.status}</td>
         </tr>`;
     }).join('');
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        alert('Please allow pop-ups for printing');
+    // Open new window for printing
+    const printWin = window.open('', '_blank', 'width=1400,height=900');
+    if (!printWin) {
+        toast.error('Pop-up blocked', { description: 'Please allow pop-ups to print' });
         return;
     }
 
-    const printContent = `
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <title>${title}</title>
-                <style>
-                    @page { size: landscape; margin: 10mm; }
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 15px; font-size: 9px; }
-                    h1 { margin: 0 0 5px 0; font-size: 16px; text-align: center; }
-                    .print-date { font-size: 9px; color: #666; text-align: right; margin-bottom: 8px; }
-                    .print-summary { font-size: 10px; margin-bottom: 10px; color: #333; }
-                    table { width: 100%; border-collapse: collapse; }
-                    thead { display: table-header-group; }
-                    th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; }
-                    th { background-color: #f5f5f5; font-weight: bold; font-size: 9px; }
-                    .status-active { color: #22c55e; font-weight: bold; }
-                    .status-inactive { color: #ef4444; font-weight: bold; }
-                    .status-at-risk { color: #f59e0b; font-weight: bold; }
-                </style>
-            </head>
-            <body>
-                <h1>${title}</h1>
-                <p class="print-date">Printed: ${new Date().toLocaleString('en-IN')}</p>
-                <p class="print-summary">Total Students: ${students.length}</p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Admission No</th>
-                            <th>Name</th>
-                            <th>Class</th>
-                            <th>Section</th>
-                            <th>Father Name</th>
-                            <th>Phone</th>
-                            <th>Attendance</th>
-                            <th>Fee Balance</th>
-                            <th>Transport</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rows}
-                    </tbody>
-                </table>
-            </body>
-        </html>
-    `;
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<title>${title}</title>
+<style>
+@page { size: landscape; margin: 10mm; }
+body { font-family: Arial, sans-serif; margin: 0; padding: 15px; font-size: 10px; color: #000; }
+h1 { text-align: center; margin: 0 0 8px 0; font-size: 18px; }
+.info { font-size: 10px; color: #555; margin-bottom: 10px; display: flex; justify-content: space-between; }
+table { width: 100%; border-collapse: collapse; }
+th { background: #eee; font-weight: bold; padding: 5px 6px; border: 1px solid #333; font-size: 10px; text-align: left; }
+td { border: 1px solid #333; padding: 4px 6px; font-size: 9px; }
+tr:nth-child(even) { background: #f9f9f9; }
+</style>
+</head>
+<body>
+<h1>${title}</h1>
+<div class="info"><span>Printed: ${new Date().toLocaleString('en-IN')}</span><span>Total Students: ${students.length}</span></div>
+<table>
+<thead><tr>
+<th style="width:30px">#</th><th style="width:90px">Admission No</th><th>Name</th><th style="width:65px">Class</th><th style="width:50px">Section</th><th>Father Name</th><th style="width:85px">Phone</th><th style="width:65px">Attendance</th><th style="width:75px">Fee Balance</th><th style="width:65px">Transport</th><th style="width:55px">Status</th>
+</tr></thead>
+<tbody>
+${tableRows}
+</tbody>
+</table>
+</body>
+</html>`;
 
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    
-    printWindow.onload = () => {
-        printWindow.focus();
-        printWindow.print();
-        printWindow.close();
-    };
+    // Write to new window
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+
+    // Wait for content to fully render then print
+    setTimeout(() => {
+        try {
+            printWin.focus();
+            printWin.print();
+        } catch (e) {
+            console.error('Print error:', e);
+        }
+    }, 1000);
 };
 
 
