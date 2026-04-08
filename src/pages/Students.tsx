@@ -67,13 +67,13 @@ const statusStyles = {
     inactive: 'bg-muted text-muted-foreground',
 };
 
-// --- CORE EXPORT/PRINT FUNCTIONS (Remain the same) ---
+// --- CORE EXPORT/PRINT FUNCTIONS ---
 const exportToCSV = (data: Student[], fileName: string) => {
     const headers = [
-        'ID', 'Admission No', 'Name', 'Roll No', 'Class', 'Section', 'Father Name', 
+        'ID', 'Admission No', 'Name', 'Roll No', 'Class', 'Section', 'Father Name',
         'Attendance (%)', 'Fee Balance', 'Transport', 'Status'
     ];
-    
+
     const csvRows = data.map(student => {
         const feeDisplay = getFeeBalanceDisplay(student);
 
@@ -81,7 +81,7 @@ const exportToCSV = (data: Student[], fileName: string) => {
             student._id,
             student.admissionNumber,
             `${student.student.firstName} ${student.student.lastName}`,
-            'N/A', // Assuming Roll No is not directly available or needs calculation
+            'N/A',
             student.class.className,
             student.class.section,
             student.parents.father.name,
@@ -91,12 +91,12 @@ const exportToCSV = (data: Student[], fileName: string) => {
             student.status
         ].map(item => `"${String(item).replace(/"/g, '""')}"`).join(',');
     });
-    
+
     const csvContent = [headers.join(','), ...csvRows].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
-    if (link.download !== undefined) { 
+    if (link.download !== undefined) {
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
         link.setAttribute("download", fileName + ".csv");
@@ -107,20 +107,33 @@ const exportToCSV = (data: Student[], fileName: string) => {
     }
 };
 
-const handlePrint = (tableId: string, title: string) => {
-    const tableToPrint = document.getElementById(tableId);
-
-    if (!tableToPrint) {
-        console.error("Print Error: Table element not found.");
-        return;
-    }
-
-    // Check if table has content
-    const rows = tableToPrint.querySelectorAll('tbody tr');
-    if (!rows || rows.length === 0) {
+// Print function that builds HTML directly from student data
+const printStudentData = (students: Student[], title: string) => {
+    if (!students || students.length === 0) {
         alert('No student data available to print');
         return;
     }
+
+    // Build table rows from data
+    const rows = students.map((student, index) => {
+        const feeDisplay = getFeeBalanceDisplay(student);
+        const statusClass = student.status === 'active' ? 'status-active' : student.status === 'inactive' ? 'status-inactive' : 'status-at-risk';
+        const transportStatus = normalizeTransportValue(student.transport) === 'yes' ? 'Enrolled' : 'Not Enrolled';
+        
+        return `<tr>
+            <td>${index + 1}</td>
+            <td>${student.admissionNumber || '-'}</td>
+            <td>${student.student.firstName} ${student.student.lastName || ''}</td>
+            <td>${student.class.className}</td>
+            <td>${student.class.section}</td>
+            <td>${student.parents.father.name || '-'}</td>
+            <td>${student.parents.father.phone || '-'}</td>
+            <td>${student.attendance ?? '-'}%</td>
+            <td>${feeDisplay.amount !== null ? '₹' + feeDisplay.amount.toLocaleString('en-IN') : feeDisplay.label}</td>
+            <td>${transportStatus}</td>
+            <td class="${statusClass}">${student.status}</td>
+        </tr>`;
+    }).join('');
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -134,29 +147,44 @@ const handlePrint = (tableId: string, title: string) => {
             <head>
                 <title>${title}</title>
                 <style>
-                    @page { size: landscape; margin: 15mm; }
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 15px; font-size: 11px; }
-                    h1 { margin: 0 0 10px 0; font-size: 18px; text-align: center; }
-                    .print-date { font-size: 10px; color: #666; text-align: right; margin-bottom: 10px; }
-                    table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+                    @page { size: landscape; margin: 10mm; }
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 15px; font-size: 9px; }
+                    h1 { margin: 0 0 5px 0; font-size: 16px; text-align: center; }
+                    .print-date { font-size: 9px; color: #666; text-align: right; margin-bottom: 8px; }
+                    .print-summary { font-size: 10px; margin-bottom: 10px; color: #333; }
+                    table { width: 100%; border-collapse: collapse; }
                     thead { display: table-header-group; }
-                    tr { page-break-inside: avoid; }
-                    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
-                    th { background-color: #f0f0f0; font-weight: bold; font-size: 10px; }
-                    td { font-size: 10px; }
+                    th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; }
+                    th { background-color: #f5f5f5; font-weight: bold; font-size: 9px; }
                     .status-active { color: #22c55e; font-weight: bold; }
                     .status-inactive { color: #ef4444; font-weight: bold; }
                     .status-at-risk { color: #f59e0b; font-weight: bold; }
-                    @media print {
-                        body { padding: 0; }
-                        h1 { font-size: 16px; }
-                    }
                 </style>
             </head>
             <body>
                 <h1>${title}</h1>
                 <p class="print-date">Printed: ${new Date().toLocaleString('en-IN')}</p>
-                ${tableToPrint.outerHTML}
+                <p class="print-summary">Total Students: ${students.length}</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Admission No</th>
+                            <th>Name</th>
+                            <th>Class</th>
+                            <th>Section</th>
+                            <th>Father Name</th>
+                            <th>Phone</th>
+                            <th>Attendance</th>
+                            <th>Fee Balance</th>
+                            <th>Transport</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
             </body>
         </html>
     `;
@@ -164,7 +192,6 @@ const handlePrint = (tableId: string, title: string) => {
     printWindow.document.write(printContent);
     printWindow.document.close();
     
-    // Wait for content to load then print
     printWindow.onload = () => {
         printWindow.focus();
         printWindow.print();
@@ -1818,7 +1845,7 @@ export default function Students() {
     };
 
     const handlePrintData = () => {
-        handlePrint('students-data-table', 'Student Directory Report');
+        printStudentData(filteredStudents, 'Student Directory Report');
     };
 
     // 8. RENDER STATES
