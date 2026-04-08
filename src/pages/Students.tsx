@@ -1699,6 +1699,33 @@ export default function Students() {
     }, []);
 
     // 7. BULK IMPORT HANDLERS
+    // Helper function to parse CSV line properly (handles quoted values)
+    const parseCSVLine = (line: string): string[] => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                if (inQuotes && line[i + 1] === '"') {
+                    current += '"';
+                    i++; // Skip escaped quote
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current.trim());
+        return result;
+    };
+
     const handleBulkImport = async () => {
         if (!bulkImportFile) {
             toast.error('Please select a file to import');
@@ -1713,7 +1740,7 @@ export default function Students() {
             reader.onload = async (e) => {
                 try {
                     const text = e.target?.result as string;
-                    const lines = text.split('\n').filter(line => line.trim());
+                    const lines = text.split(/\r?\n/).filter(line => line.trim());
 
                     if (lines.length < 2) {
                         toast.error('File must have at least a header row and one data row');
@@ -1721,7 +1748,7 @@ export default function Students() {
                         return;
                     }
 
-                    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, ''));
                     const requiredHeaders = ['firstname', 'classname', 'section', 'fathername', 'fatherphone'];
                     const missingHeaders = requiredHeaders.filter(rh => !headers.includes(rh));
 
@@ -1732,12 +1759,24 @@ export default function Students() {
                     }
 
                     const students = [];
+                    const seenAdmissionNumbers = new Set<string>();
+
                     for (let i = 1; i < lines.length; i++) {
-                        const values = lines[i].split(',').map(v => v.trim());
+                        const values = parseCSVLine(lines[i]);
+                        if (values.length < headers.length) continue; // Skip incomplete rows
+                        
                         const student: any = {};
                         headers.forEach((header, index) => {
                             student[header] = values[index] || '';
                         });
+
+                        // Skip if admission number is duplicate within file
+                        if (student.admissionnumber && seenAdmissionNumbers.has(student.admissionnumber)) {
+                            continue;
+                        }
+                        if (student.admissionnumber) {
+                            seenAdmissionNumbers.add(student.admissionnumber);
+                        }
 
                         // Map headers to expected format
                         students.push({
@@ -1762,6 +1801,12 @@ export default function Students() {
                             admissionNumber: student.admissionnumber || undefined,
                             academicYear: student.academicyear || '2025-2026'
                         });
+                    }
+
+                    if (students.length === 0) {
+                        toast.error('No valid student data found in file');
+                        setIsImporting(false);
+                        return;
                     }
 
                     const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
