@@ -39,6 +39,7 @@ import ExamCard from '@/components/dashboard/Exams/ExamCard';
 // Hooks & Services
 import { useAuth } from '@/contexts/AuthContext';
 import { useExam } from '@/hooks/useExam';
+import { examService } from '@/Services/exam.service';
 import { toast } from 'sonner';
 import { formatDuration, formatExamDate, formatTime } from '@/lib/utils/examUtils';
 
@@ -71,6 +72,7 @@ const ExamsPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [selectedExam, setSelectedExam] = useState<ExamWithSubmission | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [hasPermissionError, setHasPermissionError] = useState(false);
@@ -230,7 +232,7 @@ const ExamsPage: React.FC = () => {
     }
   };
 
-  const handleExamAction = (exam: ExamWithSubmission, action: string) => {
+  const handleExamAction = async (exam: ExamWithSubmission, action: string) => {
     if (!exam?._id) {
       toast.error('Invalid exam data');
       return;
@@ -277,9 +279,18 @@ const ExamsPage: React.FC = () => {
         navigate(`/exams/${exam._id}/results`);
         break;
       case 'delete':
-        if (window.confirm(`Are you sure you want to delete "${exam.name}"?`)) {
-          // Implement delete logic
-          toast.success('Delete functionality coming soon');
+        if (window.confirm(`Are you sure you want to delete "${exam.name}"? This action cannot be undone.`)) {
+          try {
+            setIsDeleting(true);
+            await examService.deleteExam(exam._id!);
+            toast.success('Exam deleted successfully');
+            // Refresh the exam list
+            await fetchExams();
+          } catch (error: any) {
+            toast.error(error.message || 'Failed to delete exam');
+          } finally {
+            setIsDeleting(false);
+          }
         }
         break;
       default:
