@@ -35,6 +35,7 @@ import {
   Settings,
   TrendingUp,
   BookOpen,
+  RefreshCw,
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 
@@ -57,6 +58,7 @@ const TimetableManagement = () => {
   // Fetch classes from API
   const [classes, setClasses] = useState<Array<{ _id: string; className: string }>>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   interface TimetableContext {
     classId?: string | { _id?: string };
@@ -68,6 +70,7 @@ const TimetableManagement = () => {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
+        setApiError(null);
         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
@@ -110,8 +113,9 @@ const TimetableManagement = () => {
         if (classesData.length > 0) {
           setSelectedClass(classesData[0]._id);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching timetable setup data:', error);
+        setApiError(error.response?.data?.message || error.message || 'Failed to load timetable data. Please check your connection.');
       } finally {
         setLoadingClasses(false);
       }
@@ -163,6 +167,10 @@ const TimetableManagement = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
           <Button variant="outline" size="sm">
             <Download className="h-4 w-4 mr-2" />
             Export Report
@@ -175,6 +183,25 @@ const TimetableManagement = () => {
           )}
         </div>
       </div>
+
+      {/* Error Display */}
+      {apiError && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+              <div className="flex-1">
+                <p className="font-medium text-destructive">Failed to Load Data</p>
+                <p className="text-sm text-muted-foreground mt-1">{apiError}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Enhanced Filters Panel */}
       <Card>
