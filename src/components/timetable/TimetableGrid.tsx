@@ -6,6 +6,8 @@ import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import './TimetableGrid.css';
 
+const ensureArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
+
 interface TimetableGridProps {
   classId: string;
   sectionId: string;
@@ -93,7 +95,7 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
           headers
         });
         const tsData = timeSlotsRes.data?.data || timeSlotsRes.data;
-        setTimeSlots(Array.isArray(tsData) ? tsData : []);
+        setTimeSlots(ensureArray<TimeSlot>(tsData));
       } catch (timeslotErr: any) {
         console.log('No timeslots found, will use empty array');
         setTimeSlots([]);
@@ -110,8 +112,7 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
 
       setTimetable(timetableRes.data?.data?.timetable);
       const rawSlots = timetableRes.data?.data?.slots;
-      const normalizedSlots = Array.isArray(rawSlots)
-        ? rawSlots.map((slot: TimetableSlot) => {
+      const normalizedSlots = ensureArray<TimetableSlot>(rawSlots).map((slot) => {
             if (slot.conflictType === 'qualification_mismatch') {
               return {
                 ...slot,
@@ -120,8 +121,7 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
               };
             }
             return slot;
-          })
-        : [];
+          });
       setSlots(normalizedSlots);
 
       // Fetch conflicts only if timetable exists
@@ -131,11 +131,9 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
           headers
         });
         const conflictsData = conflictsRes.data?.data || conflictsRes.data;
-        const filteredConflicts = Array.isArray(conflictsData)
-          ? conflictsData.filter(
-              (conflict: any) => conflict.conflictType !== 'qualification_mismatch'
-            )
-          : [];
+        const filteredConflicts = ensureArray<any>(conflictsData).filter(
+          (conflict) => conflict.conflictType !== 'qualification_mismatch'
+        );
         setConflicts(filteredConflicts);
       } catch (conflictErr: any) {
         console.log('No conflicts data');
@@ -326,7 +324,7 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
 
   // Handle slot click to open assignment modal
   const handleSlotClick = (day: number, timeSlot: TimeSlot) => {
-    const existingSlot = slots.find(
+    const existingSlot = ensureArray<TimetableSlot>(slots).find(
       (s) => s.dayOfWeek === day && s.timeSlotId._id === timeSlot._id
     );
 
@@ -383,8 +381,8 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
       
       // Handle 409 Conflict errors
       if (err.response?.status === 409) {
-        const conflicts = err.response?.data?.conflicts || [];
-        const conflictMessages = conflicts.map((c: any) => c.message).join(', ');
+        const conflicts = ensureArray<any>(err.response?.data?.conflicts);
+        const conflictMessages = conflicts.map((c) => c.message).join(', ');
         const errorMsg = conflictMessages || err.response?.data?.message || 'Conflict detected';
         setError(`⚠️ Conflict: ${errorMsg}`);
         // Don't close modal - let user see the error and try again
@@ -399,7 +397,7 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
 
   // Get slot for a specific day and time
   const getSlotForDayTime = (dayOfWeek: number, timeSlotId: string) => {
-    return slots.find(s => s.dayOfWeek === dayOfWeek && s.timeSlotId._id === timeSlotId);
+    return ensureArray<TimetableSlot>(slots).find(s => s.dayOfWeek === dayOfWeek && s.timeSlotId._id === timeSlotId);
   };
 
   // Get slot CSS class based on state
@@ -525,7 +523,7 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
             </tr>
           </thead>
           <tbody>
-            {timeSlots.map((timeSlot) => (
+            {ensureArray<TimeSlot>(timeSlots).map((timeSlot) => (
               <tr key={timeSlot._id} className={`period-row ${timeSlot.slotType}`}>
                 {/* Time slot label */}
                 <td className="time-cell">

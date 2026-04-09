@@ -9,6 +9,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { StatCard } from '@/components/dashboard/StatCard';
 import './StudentTimetable.css';
 
+const ensureArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
+
 const STATIC_TIME_SLOTS = [
   { _id: 'sts1', slotName: 'Period 1', startTime: '09:00', endTime: '09:45', slotType: 'period' },
   { _id: 'sts2', slotName: 'Period 2', startTime: '09:45', endTime: '10:30', slotType: 'period' },
@@ -115,7 +117,8 @@ const StudentTimetable = () => {
 
       // Fetch student class (from student record or user context)
       const studentRes = await axios.get(`/api/students?user=${userId}`, { headers });
-      const studentData = studentRes.data.data?.[0];
+      const studentRecords = ensureArray<any>(studentRes.data?.data);
+      const studentData = studentRecords[0];
       
       if (!studentData?.classId && !studentData?.className) {
         setUsingFallback(true);
@@ -162,9 +165,7 @@ const StudentTimetable = () => {
           ? timetablePayload.slots
           : [];
 
-      const normalizedTimeSlots = Array.isArray(timeSlotsRes.data?.data)
-        ? timeSlotsRes.data.data
-        : [];
+      const normalizedTimeSlots = ensureArray<any>(timeSlotsRes.data?.data);
 
       if (normalizedTimetable.length === 0 || normalizedTimeSlots.length === 0) {
         setUsingFallback(true);
@@ -199,7 +200,7 @@ const StudentTimetable = () => {
   };
 
   const getTeachingPeriods = () => {
-    return timeSlots.filter(slot => slot.slotType === 'period');
+    return ensureArray<any>(timeSlots).filter(slot => slot.slotType === 'period');
   };
 
   // Get today's classes

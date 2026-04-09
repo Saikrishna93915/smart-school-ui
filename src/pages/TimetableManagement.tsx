@@ -39,6 +39,8 @@ import {
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 
+const ensureArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
+
 /**
  * TimetableManagement Page - Enhanced with SilverSand Design
  * Role-based timetable view:
@@ -83,7 +85,7 @@ const TimetableManagement = () => {
         ]);
 
         const classesData = classesResponse.data?.data || classesResponse.data;
-        const safeClasses = Array.isArray(classesData) ? classesData : [];
+        const safeClasses = ensureArray<{ _id: string; className: string }>(classesData);
         setClasses(safeClasses);
 
         const timetablesData = timetablesResponse.data?.data;
@@ -114,8 +116,8 @@ const TimetableManagement = () => {
         }
 
         // Fallback to first class to avoid empty "Select a Class" state on first load.
-        if (classesData.length > 0) {
-          setSelectedClass(classesData[0]._id);
+        if (safeClasses.length > 0) {
+          setSelectedClass(safeClasses[0]._id);
         }
       } catch (error: any) {
         console.error('Error fetching timetable setup data:', error);

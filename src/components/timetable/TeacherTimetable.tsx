@@ -10,6 +10,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { StatCard } from '@/components/dashboard/StatCard';
 import './TeacherTimetable.css';
 
+const ensureArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
+
 const STATIC_TIME_SLOTS = [
   { _id: 'ts1', slotName: 'Period 1', startTime: '09:00', endTime: '09:45', slotType: 'period' },
   { _id: 'ts2', slotName: 'Period 2', startTime: '09:45', endTime: '10:30', slotType: 'period' },
@@ -152,9 +154,7 @@ const TeacherTimetable = () => {
           ? timetablePayload.slots
           : [];
 
-      const normalizedTimeSlots = Array.isArray(timeSlotsRes.data?.data)
-        ? timeSlotsRes.data.data
-        : [];
+      const normalizedTimeSlots = ensureArray<any>(timeSlotsRes.data?.data);
 
       if (normalizedTimetable.length === 0 || normalizedTimeSlots.length === 0) {
         setUsingFallback(true);
@@ -189,7 +189,7 @@ const TeacherTimetable = () => {
 
   // Get teaching periods only
   const getTeachingPeriods = () => {
-    return timeSlots.filter(slot => slot.slotType === 'period');
+    return ensureArray<any>(timeSlots).filter(slot => slot.slotType === 'period');
   };
 
   // Calculate statistics

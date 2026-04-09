@@ -3,6 +3,8 @@ import apiClient from '../../Services/apiClient';
 import { X, AlertCircle, Check } from 'lucide-react';
 import './SlotAssignmentModal.css';
 
+const ensureArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
+
 interface ModalConflict {
   type: string;
   message: string;
@@ -86,7 +88,7 @@ const SlotAssignmentModal = ({
 
       // Fetch subjects for the specific class
       const subjectsRes = await apiClient.get('/subjects', { headers });
-      let subjectsData = subjectsRes.data.data || [];
+      let subjectsData = ensureArray<any>(subjectsRes.data?.data || subjectsRes.data);
       console.log('Raw subjects from API:', subjectsData.length, subjectsData);
       
       // Filter subjects by className if provided
@@ -104,7 +106,9 @@ const SlotAssignmentModal = ({
 
       // Fetch all teachers (backend returns array directly, not wrapped)
       const teachersRes = await apiClient.get('/admin/teachers', { headers });
-      const teachersData = Array.isArray(teachersRes.data) ? teachersRes.data : (teachersRes.data.data || []);
+      const teachersData = Array.isArray(teachersRes.data)
+        ? teachersRes.data
+        : ensureArray<any>(teachersRes.data?.data || teachersRes.data);
       console.log('Raw teachers from API:', teachersData.length, teachersData);
       
       // Transform and deduplicate teachers by _id
@@ -197,7 +201,7 @@ const SlotAssignmentModal = ({
         conflicts: response.data.data?.conflicts
       });
 
-      const filteredConflicts = (response.data.data?.conflicts || []).filter(
+      const filteredConflicts = ensureArray<ModalConflict>(response.data.data?.conflicts).filter(
         (conflict: ModalConflict) => conflict.type !== 'qualification_mismatch'
       );
 
