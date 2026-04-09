@@ -1,8 +1,9 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
+import { clearStoredAuth, getStoredToken } from "@/lib/auth/storage";
 
 // API configuration
 const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_URL || "http://localhost:5000",
+  BASE_URL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
   TIMEOUT: 30000,
   RETRY_COUNT: 1,
   RETRY_DELAY: 1000
@@ -20,8 +21,7 @@ const apiClient = axios.create({
 // Enhanced request interceptor with better typing
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem("auth_token") || 
-                  localStorage.getItem("token");
+    const token = getStoredToken();
     
     // Ensure headers and params objects exist so assignments are safe for the stricter axios types
     config.headers = config.headers ?? {};
@@ -62,18 +62,22 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
-    
-    // Log error details
+
+    // Log error details WITH RESPONSE BODY
     console.error("❌ API Error:", {
       url: error.config?.url,
       method: error.config?.method,
       status: error.response?.status,
       statusText: error.response?.statusText,
       message: error.message,
+      responseBody: error.response?.data, // SHOW ACTUAL ERROR MESSAGES
     });
     
-    // Handle 401 Unauthorized - redirect to login
-    if (error.response?.status === 401) {
+    const requestUrl = (error.config?.url || '') as string;
+    const isAuthEndpoint = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/logout');
+
+    // Handle 401 Unauthorized - redirect to login (except auth endpoints)
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       handleUnauthorizedError();
       return Promise.reject(error);
     }
@@ -101,9 +105,7 @@ apiClient.interceptors.response.use(
 
 // Helper functions for error handling
 const handleUnauthorizedError = () => {
-  localStorage.removeItem("auth_token");
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  clearStoredAuth();
   
   // Only redirect if not already on login page
   if (!window.location.pathname.includes('/login')) {
@@ -123,24 +125,27 @@ const createNetworkError = () => {
 };
 
 const createServerError = (originalError: any) => {
-  const error = new Error(
-    originalError.response?.data?.message || 
-    `Server error (${originalError.response?.status}). Please try again later.`
-  );
+  const errorMessage = originalError?.response?.data?.message ||
+                       originalError?.message ||
+                       `Server error (${originalError?.response?.status}). Please try again later.`;
+  
+  const error = new Error(errorMessage);
   error.name = "ServerError";
-  (error as any).status = originalError.response?.status;
+  (error as any).status = originalError?.response?.status;
+  (error as any).data = originalError?.response?.data;
   return error;
 };
 
 const createClientError = (originalError: any) => {
-  const errorMessage = originalError.response?.data?.message || 
-                       originalError.response?.data?.error ||
-                       `Request failed with status ${originalError.response?.status}`;
-  
+  const errorMessage = originalError?.response?.data?.message ||
+                       originalError?.response?.data?.error ||
+                       originalError?.message ||
+                       `Request failed with status ${originalError?.response?.status}`;
+
   const error = new Error(errorMessage);
   error.name = "ClientError";
-  (error as any).status = originalError.response?.status;
-  (error as any).data = originalError.response?.data;
+  (error as any).status = originalError?.response?.status;
+  (error as any).data = originalError?.response?.data;
   return error;
 };
 

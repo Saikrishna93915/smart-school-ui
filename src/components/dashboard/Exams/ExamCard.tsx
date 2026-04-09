@@ -1,7 +1,6 @@
 // src/components/dashboard/Exams/ExamCard.tsx
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +28,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { Exam } from '@/types/exam';
+import { toast } from 'sonner';
 import { 
   formatExamDate, 
   formatDuration, 
@@ -41,24 +41,26 @@ import {
 interface ExamCardProps {
   exam: Exam | null | undefined;
   viewMode: 'teacher' | 'student';
+  onView?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStart?: () => void;
   onViewResults?: () => void;
+  onAnalytics?: () => void;
   className?: string;
 }
 
 const ExamCard: React.FC<ExamCardProps> = ({
   exam,
   viewMode,
+  onView,
   onEdit,
   onDelete,
   onStart,
   onViewResults,
+  onAnalytics,
   className = ''
 }) => {
-  const navigate = useNavigate();
-  
   // Handle null/undefined exam
   if (!exam) {
     return (
@@ -85,7 +87,11 @@ const ExamCard: React.FC<ExamCardProps> = ({
       console.error('Exam ID is missing');
       return;
     }
-    navigate(`/dashboard/exams/${exam._id}`);
+    if (onView) {
+      onView();
+    } else {
+      toast.info('Exam detail page coming soon');
+    }
   };
 
   const handleAction = (action: string) => {
@@ -106,6 +112,9 @@ const ExamCard: React.FC<ExamCardProps> = ({
         break;
       case 'results':
         onViewResults?.();
+        break;
+      case 'analytics':
+        onAnalytics?.();
         break;
       default:
         console.warn('Unknown action:', action);
@@ -154,10 +163,17 @@ const ExamCard: React.FC<ExamCardProps> = ({
                 View Details
               </DropdownMenuItem>
               
-              {viewMode === 'teacher' && exam.status === 'draft' && (
+              {viewMode === 'teacher' && (
                 <DropdownMenuItem onClick={() => handleAction('edit')}>
                   <Edit2 className="h-4 w-4 mr-2" />
                   Edit Exam
+                </DropdownMenuItem>
+              )}
+              
+              {viewMode === 'teacher' && (
+                <DropdownMenuItem onClick={() => handleAction('analytics')}>
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  View Analytics
                 </DropdownMenuItem>
               )}
               

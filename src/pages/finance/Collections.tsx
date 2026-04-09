@@ -1,4 +1,4 @@
-// src/pages/finance/Collections.tsx - UPDATED VERSION
+// src/pages/finance/Collections.tsx - PRODUCTION VERSION
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,6 @@ import {
   Clock,
   Building,
   Smartphone,
-  Mail,
   FileText,
   Printer,
   Share2,
@@ -78,7 +77,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 // Import the service
-import { collectionsService, type Collection, type CollectionsResponse } from '@/Services/collectionsService';
+import { collectionsService, type Collection } from '@/Services/collectionsService';
 
 // Mock data for fallback
 const MOCK_COLLECTIONS = [
@@ -126,7 +125,7 @@ const Collections = () => {
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [statusUpdateNotes, setStatusUpdateNotes] = useState('');
   const [newStatus, setNewStatus] = useState('completed');
-  
+
   // Data states
   const [collections, setCollections] = useState<Collection[]>([]);
   const [statistics, setStatistics] = useState({
@@ -140,40 +139,57 @@ const Collections = () => {
   });
   const [monthlyTrend, setMonthlyTrend] = useState<any[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<any[]>([]);
+  const [availableClasses, setAvailableClasses] = useState<string[]>([]);
 
-  // Filter options
-  const classOptions = ['All Classes', '9-A', '9-B', '10-A', '10-B', '11-A', '11-B', '12-A', '12-B'];
+  // Filter options - STANDARDIZED values that match backend expectations
   const statusOptions = ['All Status', 'completed', 'pending', 'failed'];
-  const paymentMethodOptions = ['All Methods', 'cash', 'UPI', 'card', 'cheque', 'bank_transfer', 'online'];
+  const paymentMethodOptions = ['All Methods', 'cash', 'upi', 'card', 'cheque', 'bank_transfer', 'online'];
   const statusUpdateOptions = ['completed', 'pending', 'failed', 'cancelled', 'refunded'];
+
+  // CRITICAL: Class options come from API, not from filtered data
+  const dynamicClassOptions = ['All Classes', ...availableClasses];
+
+  // CRITICAL: Fetch unique class names from backend on mount
+  useEffect(() => {
+    const fetchClasses = async () => {
+      try {
+        const classes = await collectionsService.getCollectionClasses();
+        setAvailableClasses(classes);
+      } catch (error) {
+        console.error('Error fetching classes:', error);
+      }
+    };
+    fetchClasses();
+  }, []);
 
   // Load collections data
   const loadCollections = async () => {
     setLoading(true);
     try {
       const params: any = {
-        search: searchTerm || undefined,
+        search: searchTerm?.trim() || undefined,
+        // CRITICAL: Send exact class value as stored in DB
         className: selectedClass !== 'All Classes' ? selectedClass : undefined,
-        status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
-        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter : undefined,
+        // CRITICAL: Send status in lowercase
+        status: selectedStatus !== 'All Status' ? selectedStatus.toLowerCase() : undefined,
+        // CRITICAL: Send payment method in lowercase with underscores normalized
+        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter.toLowerCase() : undefined,
         page: 1,
-        limit: 50,
-        sortBy: 'paymentDate',
-        sortOrder: 'desc'
+        limit: 50
       };
 
       // Remove undefined values
       Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
 
       const response = await collectionsService.getCollections(params);
-      
+
       if (response.success) {
         setCollections(response.collections || []);
-        
+
         if (response.statistics) {
           setStatistics(response.statistics);
         }
-        
+
         // Transform distribution data for charts
         if (response.distributions) {
           // Monthly trend
@@ -183,7 +199,7 @@ const Collections = () => {
             transactions: item.count || 0
           })) || [];
           setMonthlyTrend(monthlyData);
-          
+
           // Payment method distribution
           const methodData = response.distributions.methodDistribution?.map((item: any) => {
             const methodName = formatPaymentMethod(item._id);
@@ -196,7 +212,7 @@ const Collections = () => {
           }) || [];
           setPaymentMethodData(methodData);
         }
-        
+
         toast.success(`Loaded ${response.collections?.length || 0} collections`);
       } else {
         const errMsg = (response as any)?.message || (response as any)?.error || 'Failed to load collections';
@@ -237,10 +253,13 @@ const Collections = () => {
     setExportLoading(true);
     try {
       const params: any = {
-        search: searchTerm || undefined,
+        search: searchTerm?.trim() || undefined,
+        // CRITICAL: Send exact class value as stored in DB
         className: selectedClass !== 'All Classes' ? selectedClass : undefined,
-        status: selectedStatus !== 'All Status' ? selectedStatus : undefined,
-        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter : undefined,
+        // CRITICAL: Send status in lowercase
+        status: selectedStatus !== 'All Status' ? selectedStatus.toLowerCase() : undefined,
+        // CRITICAL: Send payment method in lowercase
+        paymentMethod: paymentMethodFilter !== 'All Methods' ? paymentMethodFilter.toLowerCase() : undefined,
       };
 
       const blob = await collectionsService.exportCollections(params);
@@ -453,10 +472,30 @@ const Collections = () => {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-IN', {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return 'N/A';
+    // CRITICAL: Display in IST timezone for Indian users
+    return d.toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    });
+  };
+
+  // CRITICAL: Format datetime with IST timezone
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
     });
   };
 
@@ -502,21 +541,20 @@ const Collections = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  // Filter collections
+  // Filter collections - CRITICAL: Only do client-side search, NOT class/status/method
+  // because those are already filtered by the backend API
   const filteredCollections = collections.filter(collection => {
-    const matchesSearch = 
+    // Only search filter - class/status/method are handled by backend
+    const matchesSearch =
       searchTerm === '' ||
-      collection.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      collection.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      collection.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      collection.parentName.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesClass = selectedClass === 'All Classes' || collection.className === selectedClass;
-    const matchesStatus = selectedStatus === 'All Status' || collection.status === selectedStatus;
-    const matchesMethod = paymentMethodFilter === 'All Methods' || 
-                         collection.paymentMethod.toLowerCase() === paymentMethodFilter.toLowerCase();
-    
-    return matchesSearch && matchesClass && matchesStatus && matchesMethod;
+      (collection.studentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.studentId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.receiptNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.parentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.className || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (collection.admissionNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesSearch;
   });
 
   return (
@@ -734,7 +772,7 @@ const Collections = () => {
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    {classOptions.map((cls) => (
+                    {dynamicClassOptions.map((cls) => (
                       <SelectItem key={cls} value={cls}>{cls}</SelectItem>
                     ))}
                   </SelectContent>
@@ -829,18 +867,21 @@ const Collections = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{formatDate(collection.paymentDate)}</div>
+                        {/* CRITICAL: Show createdAt (when recorded) not paymentDate (which can be backdated) */}
+                        <div className="text-sm">{formatDateTime(collection.createdAt || collection.paymentDate)}</div>
                         <div className="text-xs text-muted-foreground">{collection.collectedBy}</div>
                       </TableCell>
                       <TableCell>{getStatusBadge(collection.status)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
-                            variant="ghost"
+                            variant="default"
                             size="sm"
-                            onClick={() => handleViewDetails(collection.receiptNumber)}
+                            onClick={() => window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank')}
+                            className="bg-blue-600 hover:bg-blue-700"
                           >
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-4 w-4 mr-1" />
+                            Receipt
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -849,9 +890,20 @@ const Collections = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleDownloadReceipt(collection.receiptNumber, 'html')}>
-                                <FileText className="h-4 w-4 mr-2" />
-                                Download Receipt
+                              <DropdownMenuItem onClick={() => window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank')}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Receipt
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                const printWindow = window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank');
+                                if (printWindow) {
+                                  setTimeout(() => {
+                                    printWindow.print();
+                                  }, 1000);
+                                }
+                              }}>
+                                <Printer className="h-4 w-4 mr-2" />
+                                Print Receipt
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => {
                                 setSelectedCollection(collection);
@@ -915,7 +967,8 @@ const Collections = () => {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Date:</span>
-                        <span>{formatDate(collection.paymentDate)}</span>
+                        {/* CRITICAL: Show createdAt (when recorded) not paymentDate */}
+                        <span>{formatDateTime(collection.createdAt || collection.paymentDate)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Collected by:</span>
@@ -927,22 +980,28 @@ const Collections = () => {
                     
                     <div className="flex gap-2">
                       <Button
-                        variant="outline"
+                        className="flex-1 bg-blue-600 hover:bg-blue-700"
                         size="sm"
-                        className="flex-1"
-                        onClick={() => handleViewDetails(collection.receiptNumber)}
+                        onClick={() => window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank')}
                       >
                         <Eye className="h-3 w-3 mr-1" />
-                        View Details
+                        Receipt
                       </Button>
                       <Button 
                         variant="outline" 
                         size="sm" 
                         className="flex-1"
-                        onClick={() => handleDownloadReceipt(collection.receiptNumber, 'html')}
+                        onClick={() => {
+                          const printWindow = window.open(`/finance/receipt/${encodeURIComponent(collection.receiptNumber)}`, '_blank');
+                          if (printWindow) {
+                            setTimeout(() => {
+                              printWindow.print();
+                            }, 1000);
+                          }
+                        }}
                       >
-                        <FileText className="h-3 w-3 mr-1" />
-                        Receipt
+                        <Printer className="h-3 w-3 mr-1" />
+                        Print
                       </Button>
                     </div>
                   </CardContent>
@@ -1043,7 +1102,8 @@ const Collections = () => {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Date</p>
-                    <p className="font-medium">{formatDate(selectedCollection.paymentDate)}</p>
+                    {/* CRITICAL: Show createdAt (when recorded) not paymentDate */}
+                    <p className="font-medium">{formatDateTime(selectedCollection.createdAt || selectedCollection.paymentDate)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Collected By</p>
@@ -1054,37 +1114,56 @@ const Collections = () => {
 
               <Separator />
 
-              <div>
-                <h4 className="font-medium mb-3">Notes</h4>
-                <p className="text-sm text-muted-foreground">{selectedCollection.notes || selectedCollection.description || 'No notes available'}</p>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button 
-                  className="flex-1"
-                  onClick={() => handleDownloadReceipt(selectedCollection.receiptNumber, 'html')}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Download Receipt
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => {
-                    setShowStatusDialog(true);
-                  }}
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Update Status
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => navigator.clipboard.writeText(selectedCollection.receiptNumber)}
-                >
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Copy Receipt No
-                </Button>
+              <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-sm mb-4 text-gray-700">Receipt & Actions</h4>
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Receipt No</p>
+                    <p className="font-bold text-sm">{selectedCollection.receiptNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Amount Paid</p>
+                    <p className="font-bold text-lg text-green-600">{formatCurrency(selectedCollection.amount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Recorded At</p>
+                    {/* CRITICAL: Show createdAt (when recorded) not paymentDate */}
+                    <p className="font-medium text-sm">{formatDateTime(selectedCollection.createdAt || selectedCollection.paymentDate)}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    onClick={() => window.open(`/finance/receipt/${encodeURIComponent(selectedCollection.receiptNumber)}`, '_blank')}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Receipt
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      const printWindow = window.open(`/finance/receipt/${encodeURIComponent(selectedCollection.receiptNumber)}`, '_blank');
+                      if (printWindow) {
+                        setTimeout(() => {
+                          printWindow.print();
+                        }, 1000);
+                      }
+                    }}
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setShowStatusDialog(true);
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Status
+                  </Button>
+                </div>
               </div>
             </div>
           </DialogContent>

@@ -1,6 +1,6 @@
 // src/pages/dashboard/Exams.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
@@ -20,7 +20,8 @@ import {
   BookOpen,
   Award,
   CheckCircle,
-  PlayCircle
+  PlayCircle,
+  BarChart3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,11 +39,12 @@ import ExamCard from '@/components/dashboard/Exams/ExamCard';
 // Hooks & Services
 import { useAuth } from '@/contexts/AuthContext';
 import { useExam } from '@/hooks/useExam';
+import { examService } from '@/Services/exam.service';
 import { toast } from 'sonner';
-import { formatDuration, formatExamDate, formatTime, getExamStatus } from '@/lib/utils/examUtils';
+import { formatDuration, formatExamDate, formatTime } from '@/lib/utils/examUtils';
 
 // Types
-import type { Exam, CreateExamData } from '@/types/exam';
+import type { Exam } from '@/types/exam';
 
 interface ExamWithSubmission extends Exam {
   submissionStatus?: string;
@@ -83,55 +85,24 @@ const ExamsPage: React.FC = () => {
 
   const isStudent = user?.role === 'student';
 
-  // Load exams on component mount
-  useEffect(() => {
-    loadInitialExams();
+  const updateStats = useCallback((examsList: ExamWithSubmission[]) => {
+    const total = examsList.length;
+    const scheduled = examsList.filter(e => e.status?.toLowerCase() === 'scheduled').length;
+    const ongoing = examsList.filter(e => 
+      e.status?.toLowerCase() === 'ongoing' || 
+      e.status?.toLowerCase() === 'live'
+    ).length;
+    const completed = examsList.filter(e => e.status?.toLowerCase() === 'completed').length;
+    const draft = examsList.filter(e => e.status?.toLowerCase() === 'draft').length;
+
+    setStats({ total, scheduled, ongoing, completed, draft });
   }, []);
 
-  // Apply filters whenever exams, activeTab, searchTerm, or classFilter changes
-  useEffect(() => {
-    applyFilters();
-  }, [exams, activeTab, searchTerm, classFilter]);
+  const updateUniqueClasses = useCallback((classes: string[]) => {
+    setUniqueClasses(classes);
+  }, []);
 
-  const loadInitialExams = async () => {
-    try {
-      setIsInitialLoading(true);
-      setHasPermissionError(false);
-      
-      if (isTeacher) {
-        // Teacher fetches all exams they created
-        await fetchExams();
-      } else if (isStudent) {
-        // Student fetches only their assigned exams
-        await fetchMyExams();
-      } else {
-        // Default to my-exams for students, all exams for others
-        if (user?.role === 'student') {
-          await fetchMyExams();
-        } else {
-          await fetchExams();
-        }
-      }
-      
-    } catch (err: any) {
-      console.error('Failed to load exams:', err);
-      
-      // Handle specific error types
-      if (err?.response?.status === 403) {
-        setHasPermissionError(true);
-        toast.error('You do not have permission to view these exams');
-      } else if (err?.response?.status === 401) {
-        toast.error('Please login again');
-        navigate('/login');
-      } else {
-        toast.error(err?.message || 'Failed to load exams');
-      }
-    } finally {
-      setIsInitialLoading(false);
-    }
-  };
-
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     if (!Array.isArray(exams) || exams.length === 0) {
       setFilteredExams([]);
       updateStats([]);
@@ -188,24 +159,55 @@ const ExamsPage: React.FC = () => {
       )
     );
     updateUniqueClasses(classes);
-  };
+  }, [exams, activeTab, searchTerm, classFilter, updateStats, updateUniqueClasses]);
 
-  const updateStats = (examsList: ExamWithSubmission[]) => {
-    const total = examsList.length;
-    const scheduled = examsList.filter(e => e.status?.toLowerCase() === 'scheduled').length;
-    const ongoing = examsList.filter(e => 
-      e.status?.toLowerCase() === 'ongoing' || 
-      e.status?.toLowerCase() === 'live'
-    ).length;
-    const completed = examsList.filter(e => e.status?.toLowerCase() === 'completed').length;
-    const draft = examsList.filter(e => e.status?.toLowerCase() === 'draft').length;
+  const loadInitialExams = useCallback(async () => {
+    try {
+      setIsInitialLoading(true);
+      setHasPermissionError(false);
+      
+      if (isTeacher) {
+        // Teacher fetches all exams they created
+        await fetchExams();
+      } else if (isStudent) {
+        // Student fetches only their assigned exams
+        await fetchMyExams();
+      } else {
+        // Default to my-exams for students, all exams for others
+        if (user?.role === 'student') {
+          await fetchMyExams();
+        } else {
+          await fetchExams();
+        }
+      }
+      
+    } catch (err: any) {
+      console.error('Failed to load exams:', err);
+      
+      // Handle specific error types
+      if (err?.response?.status === 403) {
+        setHasPermissionError(true);
+        toast.error('You do not have permission to view these exams');
+      } else if (err?.response?.status === 401) {
+        toast.error('Please login again');
+        navigate('/login');
+      } else {
+        toast.error(err?.message || 'Failed to load exams');
+      }
+    } finally {
+      setIsInitialLoading(false);
+    }
+  }, [isTeacher, isStudent, user?.role, fetchExams, fetchMyExams, navigate]);
 
-    setStats({ total, scheduled, ongoing, completed, draft });
-  };
+  // Load exams on component mount
+  useEffect(() => {
+    loadInitialExams();
+  }, []);
 
-  const updateUniqueClasses = (classes: string[]) => {
-    setUniqueClasses(classes);
-  };
+  // Apply filters whenever exams, activeTab, searchTerm, or classFilter changes
+  useEffect(() => {
+    applyFilters();
+  }, [exams, activeTab, searchTerm, classFilter]);
 
   const handleRefresh = async () => {
     try {
@@ -216,7 +218,7 @@ const ExamsPage: React.FC = () => {
     }
   };
 
-  const handleExamAction = (exam: ExamWithSubmission, action: string) => {
+  const handleExamAction = async (exam: ExamWithSubmission, action: string) => {
     if (!exam?._id) {
       toast.error('Invalid exam data');
       return;
@@ -224,11 +226,13 @@ const ExamsPage: React.FC = () => {
 
     switch (action) {
       case 'view':
-        navigate(`/dashboard/exams/${exam._id}`);
+        toast.info('Exam detail page coming soon');
+        // navigate(`/dashboard/exams/${exam._id}`);
         break;
       case 'edit':
         if (isTeacher || user?.role === 'admin') {
-          navigate(`/dashboard/exams/${exam._id}/edit`);
+          toast.info('Exam edit page coming soon');
+          // navigate(`/dashboard/exams/${exam._id}/edit`);
         } else {
           toast.error('Only teachers can edit exams');
         }
@@ -236,23 +240,36 @@ const ExamsPage: React.FC = () => {
       case 'start':
         const examStatus = exam.status?.toLowerCase();
         if (examStatus === 'ongoing' || examStatus === 'live' || examStatus === 'scheduled') {
-          navigate(`/dashboard/exams/${exam._id}/take`);
+          navigate(`/exams/${exam._id}/take`);
         } else {
           toast.error('This exam is not currently available for taking');
         }
         break;
       case 'preview':
         if (isTeacher || user?.role === 'admin') {
-          navigate(`/dashboard/exams/${exam._id}/preview`);
+          toast.info('Exam preview page coming soon');
+          // navigate(`/dashboard/exams/${exam._id}/preview`);
+        }
+        break;
+      case 'analytics':
+        if (isTeacher || user?.role === 'admin' || user?.role === 'owner') {
+          navigate(`/exams/analytics/${exam._id}`);
+        } else {
+          toast.error('Only teachers and admins can view analytics');
         }
         break;
       case 'results':
-        navigate(`/dashboard/exams/${exam._id}/results`);
+        navigate(`/exams/${exam._id}/results`);
         break;
       case 'delete':
-        if (window.confirm(`Are you sure you want to delete "${exam.name}"?`)) {
-          // Implement delete logic
-          toast.success('Delete functionality coming soon');
+        if (window.confirm(`Are you sure you want to delete "${exam.name}"? This action cannot be undone.`)) {
+          try {
+            await examService.deleteExam(exam._id!);
+            toast.success('Exam deleted successfully');
+            await loadInitialExams();
+          } catch (error: any) {
+            toast.error(error.message || 'Failed to delete exam');
+          }
         }
         break;
       default:
@@ -372,6 +389,7 @@ const ExamsPage: React.FC = () => {
           onEdit={() => handleExamAction(exam, 'edit')}
           onStart={() => handleExamAction(exam, 'start')}
           onViewResults={() => handleExamAction(exam, 'results')}
+          onAnalytics={() => handleExamAction(exam, 'analytics')}
           onDelete={() => handleExamAction(exam, 'delete')}
         />
       ))}
@@ -466,12 +484,21 @@ const ExamsPage: React.FC = () => {
                     </Button>
                   )}
                   {isTeacher && (
-                    <Button size="sm" variant="ghost" onClick={(e) => {
-                      e.stopPropagation();
-                      handleExamAction(exam, 'edit');
-                    }}>
-                      Edit
-                    </Button>
+                    <>
+                      <Button size="sm" variant="outline" onClick={(e) => {
+                        e.stopPropagation();
+                        handleExamAction(exam, 'analytics');
+                      }}>
+                        <BarChart3 className="h-4 w-4 mr-1" />
+                        Analytics
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={(e) => {
+                        e.stopPropagation();
+                        handleExamAction(exam, 'edit');
+                      }}>
+                        Edit
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -519,7 +546,7 @@ const ExamsPage: React.FC = () => {
             <>
               <Button
                 variant="outline"
-                onClick={() => navigate('/dashboard/exams/analytics')}
+                onClick={() => navigate('/exams/analytics')}
               >
                 <TrendingUp className="h-4 w-4 mr-2" />
                 Analytics

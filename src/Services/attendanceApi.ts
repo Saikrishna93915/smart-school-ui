@@ -114,5 +114,84 @@ export const attendanceApi = {
       console.error("API Error (markHoliday):", error);
       throw error;
     }
+  },
+
+  // ============ STUDENT ATTENDANCE VIEWING ============
+
+  // 7. Get current authenticated student's info
+  getCurrentStudent: async () => {
+    try {
+      const response = await apiClient.get(`/students/me`);
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      console.error("API Error (getCurrentStudent):", error);
+      return {
+        success: false,
+        data: null
+      };
+    }
+  },
+
+  // 8. Get student attendance for a date range (Student View)
+  // Students can only view their own attendance
+  getStudentAttendance: async (studentId: string, startDate: string, endDate: string) => {
+    try {
+      const response = await apiClient.get(`/attendance/student/${studentId}`, {
+        params: { startDate, endDate }
+      });
+      return {
+        success: true,
+        data: Array.isArray(response.data) ? response.data : response.data.data || response.data
+      };
+    } catch (error) {
+      console.error("API Error (getStudentAttendance):", error);
+      // Return success: false to allow frontend to handle gracefully
+      return {
+        success: false,
+        data: null,
+        error: error
+      };
+    }
+  },
+
+  // 9. Get student monthly summary (Student View)
+  getStudentMonthlySummary: async (studentId: string, month: number, year: number) => {
+    try {
+      const response = await apiClient.get(`/attendance/student/${studentId}/summary`, {
+        params: { month, year }
+      });
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      console.error("API Error (getStudentMonthlySummary):", error);
+      return {
+        success: false,
+        data: null
+      };
+    }
+  },
+
+  // 10. Get student yearly summary (Student View)
+  getStudentYearlySummary: async (studentId: string, year: number) => {
+    try {
+      const response = await apiClient.get(`/attendance/student/${studentId}/yearly`, {
+        params: { year }
+      });
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      console.error("API Error (getStudentYearlySummary):", error);
+      return {
+        success: false,
+        data: null
+      };
+    }
   }
 };

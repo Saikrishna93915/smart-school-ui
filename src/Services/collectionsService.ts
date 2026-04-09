@@ -1,8 +1,11 @@
 // src/services/collectionsService.ts
-const API_BASE_URL = 'http://localhost:8080/api';
+import { getStoredToken } from '@/lib/auth/storage';
+
+// Use the same API URL as the rest of the app
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = getStoredToken() || localStorage.getItem('token');
   return {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -207,12 +210,29 @@ export const collectionsService = {
         headers: getAuthHeaders(),
       }
     );
-    
+
     if (!response.ok) {
       throw new Error(`API Error: ${response.status} ${response.statusText}`);
     }
-    
+
     return response.json();
+  },
+
+  // CRITICAL: Get unique class names for filter dropdown
+  getCollectionClasses: async (): Promise<string[]> => {
+    const response = await fetch(
+      `${API_BASE_URL}/finance/collections/classes`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.data?.classes || [];
   },
 
   // Download receipt

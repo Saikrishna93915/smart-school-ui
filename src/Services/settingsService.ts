@@ -1,24 +1,34 @@
 // services/settingsService.ts
 import axios from 'axios';
+import { clearStoredAuth, getStoredToken } from '@/lib/auth/storage';
 
-// Base URL
+// Base URL - UPDATED to match backend port 8080
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 10000, // 10 second timeout
 });
 
 // Add auth token to requests
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    const token = getStoredToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Only set JSON content type if not FormData and no content-type already set
+    if (!(config.data instanceof FormData) && !config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+    
+    // Log request in development
+    if (import.meta.env.DEV) {
+      console.log(`📤 ${config.method?.toUpperCase()} ${config.url}`);
+    }
+    
     return config;
   },
   (error) => {
@@ -26,14 +36,28 @@ api.interceptors.request.use(
   }
 );
 
-// Handle responses
+ // Handle responses with better error logging
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Log success in development
+    if (import.meta.env.DEV) {
+      console.log(`✅ ${response.status} ${response.config.url}`);
+    }
+    return response;
+  },
   (error) => {
+    // Log error details
+    if (import.meta.env.DEV) {
+      console.error('❌ API Error:', {
+        url: error.config?.url,
+        status: error.response?.status,
+        message: error.response?.data?.message || error.message
+      });
+    }
+    
     if (error.response?.status === 401) {
       // Clear token and redirect to login
-      localStorage.removeItem('token');
-      localStorage.removeItem('authToken');
+      clearStoredAuth();
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -42,6 +66,7 @@ api.interceptors.response.use(
 
 // Base settings URL
 const SETTINGS_BASE = '/settings';
+const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 // =================== SETTINGS TYPES ===================
 export interface SchoolInfo {
@@ -57,6 +82,10 @@ export interface SchoolInfo {
   website: string;
   logo: string | null;
   motto: string;
+  totalClasses?: number;
+  totalSubjects?: number;
+  totalStudents?: number;
+  totalStaff?: number;
 }
 
 export interface AcademicYear {
@@ -68,7 +97,7 @@ export interface AcademicYear {
 }
 
 export interface NotificationSetting {
-  id: number;
+  id?: number;
   name: string;
   channels: string[];
   enabled: boolean;
@@ -117,182 +146,6 @@ export interface SettingsData {
   systemHealth?: SystemHealth;
 }
 
-// =================== SETTINGS API ===================
-export const settingsApi = {
-  // Get all settings
-  getAllSettings: async (): Promise<{ success: boolean; data: SettingsData }> => {
-    try {
-      const response = await api.get(SETTINGS_BASE);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-      throw error;
-    }
-  },
-
-  // Get settings by category
-  getSettingsByCategory: async (category: string): Promise<any> => {
-    try {
-      const response = await api.get(`${SETTINGS_BASE}/${category}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching ${category} settings:`, error);
-      throw error;
-    }
-  },
-
-  // Update school profile
-  updateSchoolProfile: async (data: Partial<SchoolInfo>): Promise<any> => {
-    try {
-      const response = await api.put(`${SETTINGS_BASE}/school`, data);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating school profile:', error);
-      throw error;
-    }
-  },
-
-  // Update academic settings
-  updateAcademicSettings: async (data: Partial<AcademicYear>): Promise<any> => {
-    try {
-      const response = await api.put(`${SETTINGS_BASE}/academic`, data);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating academic settings:', error);
-      throw error;
-    }
-  },
-
-  // Update notification settings
-  updateNotificationSettings: async (data: { notifications: NotificationSetting[] }): Promise<any> => {
-    try {
-      const response = await api.put(`${SETTINGS_BASE}/notifications`, data);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating notification settings:', error);
-      throw error;
-    }
-  },
-
-  // Update security settings
-  updateSecuritySettings: async (data: Partial<SecuritySettings>): Promise<any> => {
-    try {
-      const response = await api.put(`${SETTINGS_BASE}/security`, data);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating security settings:', error);
-      throw error;
-    }
-  },
-
-  // Update billing settings
-  updateBillingSettings: async (data: Partial<BillingInfo>): Promise<any> => {
-    try {
-      const response = await api.put(`${SETTINGS_BASE}/billing`, data);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating billing settings:', error);
-      throw error;
-    }
-  },
-
-  // Update advanced settings
-  updateAdvancedSettings: async (data: any): Promise<any> => {
-    try {
-      const response = await api.put(`${SETTINGS_BASE}/advanced`, data);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating advanced settings:', error);
-      throw error;
-    }
-  },
-
-  // Create backup
-  createBackup: async (): Promise<{ backupId: number; estimatedTime: string }> => {
-    try {
-      const response = await api.post(`${SETTINGS_BASE}/backup`, {});
-      return response.data;
-    } catch (error) {
-      console.error('Error creating backup:', error);
-      throw error;
-    }
-  },
-
-  // Export data
-  exportData: async (format: string): Promise<{ exportId: number; downloadUrl: string; expiresAt: string }> => {
-    try {
-      const response = await api.post(`${SETTINGS_BASE}/export`, { format });
-      return response.data;
-    } catch (error) {
-      console.error('Error exporting data:', error);
-      throw error;
-    }
-  },
-
-  // Get system health
-  getSystemHealth: async (): Promise<{ success: boolean; data: SystemHealth }> => {
-    try {
-      const response = await api.get(`${SETTINGS_BASE}/health`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching system health:', error);
-      throw error;
-    }
-  },
-
-  // Upload logo (multipart form)
-  uploadLogo: async (file: File): Promise<any> => {
-    try {
-      const formData = new FormData();
-      formData.append('logo', file);
-      
-      const response = await api.post(`${SETTINGS_BASE}/logo`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error uploading logo:', error);
-      throw error;
-    }
-  },
-
-  // Regenerate API key
-  regenerateApiKey: async (): Promise<{ apiKey: string }> => {
-    try {
-      const response = await api.post(`${SETTINGS_BASE}/regenerate-key`);
-      return response.data;
-    } catch (error) {
-      console.error('Error regenerating API key:', error);
-      throw error;
-    }
-  },
-
-  // Get all settings summary
-  getSettingsSummary: async (): Promise<any> => {
-    try {
-      const response = await api.get(`${SETTINGS_BASE}/summary`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching settings summary:', error);
-      throw error;
-    }
-  },
-
-  // Reset settings to default
-  resetSettings: async (category?: string): Promise<any> => {
-    try {
-      const url = category ? `${SETTINGS_BASE}/reset/${category}` : `${SETTINGS_BASE}/reset`;
-      const response = await api.post(url);
-      return response.data;
-    } catch (error) {
-      console.error('Error resetting settings:', error);
-      throw error;
-    }
-  }
-};
-
 // =================== DEFAULT SETTINGS DATA ===================
 export const defaultSettings: SettingsData = {
   schoolInfo: {
@@ -310,7 +163,7 @@ export const defaultSettings: SettingsData = {
     motto: 'Excellence Through Innovation'
   },
   academicYear: {
-    current: '2024-25',
+    current: '2024-2025',
     startDate: '2024-04-01',
     endDate: '2025-03-31',
     terms: 2,
@@ -361,6 +214,348 @@ export const defaultSettings: SettingsData = {
     memory: '68%',
     cpu: '32%',
     activeUsers: 142
+  }
+};
+
+// =================== DATA MAPPING FUNCTIONS ===================
+// Map backend school data to frontend format
+const mapSchoolData = (backendSchool: any): SchoolInfo => {
+  if (!backendSchool) return defaultSettings.schoolInfo!;
+  
+  const addr = backendSchool.address;
+  let addressStr = '';
+  if (addr) {
+    const parts = [addr.street, addr.city, addr.state, addr.pincode].filter(Boolean);
+    addressStr = parts.join(', ');
+  }
+  
+  // Handle logo - can be string or object with url property
+  let logoPath = '';
+  if (backendSchool.logo) {
+    if (typeof backendSchool.logo === 'object' && backendSchool.logo.url) {
+      logoPath = backendSchool.logo.url;
+    } else if (typeof backendSchool.logo === 'string') {
+      logoPath = backendSchool.logo;
+    }
+  }
+  
+  const resolvedLogo = logoPath
+    ? (String(logoPath).startsWith('http')
+        ? logoPath
+        : `${API_ORIGIN}${logoPath}`)
+    : null;
+
+  return {
+    name: backendSchool.name || '',
+    code: backendSchool.code || '',
+    email: backendSchool.email || '',
+    phone: backendSchool.phone || '',
+    address: addressStr || '',
+    established: backendSchool.establishedYear?.toString() || '',
+    principal: backendSchool.principal?.name || '',
+    board: backendSchool.board || '',
+    medium: backendSchool.medium || '',
+    website: backendSchool.website || '',
+    logo: resolvedLogo,
+    motto: backendSchool.motto || '',
+    // Include statistics from backend
+    totalClasses: backendSchool.statistics?.totalClasses || 36,
+    totalSubjects: backendSchool.statistics?.totalSubjects || 18,
+    totalStudents: backendSchool.statistics?.totalStudents || 0,
+    totalStaff: backendSchool.statistics?.totalStaff || 0
+  };
+};
+
+// Map backend academic data to frontend format
+const mapAcademicData = (backendAcademic: any): AcademicYear => {
+  if (!backendAcademic) return defaultSettings.academicYear!;
+  
+  const sessions = backendAcademic.sessions?.map((s: any) => s.name) || [];
+  
+  return {
+    current: backendAcademic.year || '',
+    startDate: backendAcademic.startDate || '',
+    endDate: backendAcademic.endDate || '',
+    terms: backendAcademic.terms?.length || 0,
+    sessions: sessions
+  };
+};
+
+// Map backend security data to frontend format
+const mapSecurityData = (backendSecurity: any): SecuritySettings => {
+  if (!backendSecurity) return defaultSettings.security!;
+  
+  return {
+    twoFactor: backendSecurity.authentication?.twoFactorEnabled || false,
+    sessionTimeout: backendSecurity.authentication?.sessionTimeout || 30,
+    passwordAge: backendSecurity.passwordPolicy?.expiryDays || 90,
+    failedAttempts: backendSecurity.loginSecurity?.maxFailedAttempts || 3,
+    ipWhitelist: backendSecurity.loginSecurity?.ipWhitelist || [],
+    apiKey: backendSecurity.apiSecurity?.apiKey || undefined
+  };
+};
+
+// Map backend billing data to frontend format
+const mapBillingData = (backendBilling: any): BillingInfo => {
+  if (!backendBilling) return defaultSettings.billing!;
+  
+  const currentPlan = backendBilling.currentPlan || {};
+  const limits = backendBilling.limits || {};
+  
+  return {
+    plan: currentPlan.displayName || 'Enterprise Plan',
+    status: currentPlan.status || 'active',
+    price: currentPlan.price?.amount ? `₹${currentPlan.price.amount.toLocaleString()}` : '₹24,999',
+    period: currentPlan.price?.period || 'month',
+    students: limits.students?.current || 0,
+    staff: limits.staff?.current || 0,
+    storage: limits.storage?.used ? `${limits.storage.used} GB` : '250 GB',
+    aiCredits: 'Unlimited',
+    features: currentPlan.features || defaultSettings.billing!.features
+  };
+};
+
+const mapNotificationData = (backendNotifications: any[]): NotificationSetting[] => {
+  if (!Array.isArray(backendNotifications)) {
+    return defaultSettings.notifications || [];
+  }
+
+  return backendNotifications.map((item, index) => ({
+    id: item.id ?? index + 1,
+    name: item.name || `Notification ${index + 1}`,
+    channels: Array.isArray(item.channels) ? item.channels : [],
+    enabled: Boolean(item.enabled)
+  }));
+};
+
+// =================== SETTINGS API ===================
+export const settingsApi = {
+  // Get all settings
+  getAllSettings: async (): Promise<{ success: boolean; data: SettingsData }> => {
+    try {
+      const response = await api.get(SETTINGS_BASE);
+      
+      // Map backend response to frontend format
+      const backendData = response.data.data;
+      return {
+        success: response.data.success,
+        data: {
+          schoolInfo: mapSchoolData(backendData.school),
+          academicYear: mapAcademicData(backendData.academic),
+          notifications: mapNotificationData(backendData.notifications || []),
+          security: mapSecurityData(backendData.security),
+          billing: mapBillingData(backendData.billing),
+          systemHealth: backendData.systemHealth || defaultSettings.systemHealth
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+      throw error;
+    }
+  },
+
+  // Get settings by category
+  getSettingsByCategory: async (category: string): Promise<any> => {
+    try {
+      const response = await api.get(`${SETTINGS_BASE}/${category}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching ${category} settings:`, error);
+      throw error;
+    }
+  },
+
+  // Update school profile
+  updateSchoolProfile: async (data: Partial<SchoolInfo>): Promise<any> => {
+    try {
+      // Map frontend format to backend format
+      const backendPayload = {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        address: data.address ? { street: data.address } : undefined,
+        website: data.website,
+        principal: data.principal ? { name: data.principal } : undefined,
+        board: data.board ? String(data.board).toUpperCase() : undefined,
+        medium: data.medium
+          ? ({ english: 'English', hindi: 'Hindi', both: 'Both', regional: 'Regional' } as Record<string, string>)[String(data.medium).toLowerCase()] || data.medium
+          : undefined,
+        motto: data.motto
+      };
+
+      const sanitizedPayload = Object.fromEntries(
+        Object.entries(backendPayload).filter(([, value]) => value !== undefined && value !== null && value !== '')
+      );
+      
+      const response = await api.put(`${SETTINGS_BASE}/school`, sanitizedPayload);
+      return {
+        success: response.data.success,
+        data: mapSchoolData(response.data.data)
+      };
+    } catch (error) {
+      console.error('Error updating school profile:', error);
+      throw error;
+    }
+  },
+
+  // Update academic settings
+  updateAcademicSettings: async (data: Partial<AcademicYear>): Promise<any> => {
+    try {
+      const payload = {
+        year: data.current,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        sessions: (data.sessions || []).map((name) => ({ name, type: 'regular' }))
+      };
+
+      const response = await api.put(`${SETTINGS_BASE}/academic`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating academic settings:', error);
+      throw error;
+    }
+  },
+
+  // Update notification settings
+  updateNotificationSettings: async (data: NotificationSetting[] | { notifications: NotificationSetting[] }): Promise<any> => {
+    try {
+      const payload = Array.isArray(data) ? data : (data?.notifications || []);
+      const response = await api.put(`${SETTINGS_BASE}/notifications`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating notification settings:', error);
+      throw error;
+    }
+  },
+
+  // Update security settings
+  updateSecuritySettings: async (data: Partial<SecuritySettings>): Promise<any> => {
+    try {
+      const response = await api.put(`${SETTINGS_BASE}/security`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating security settings:', error);
+      throw error;
+    }
+  },
+
+  // Update billing settings
+  updateBillingSettings: async (data: Partial<BillingInfo>): Promise<any> => {
+    try {
+      const response = await api.put(`${SETTINGS_BASE}/billing`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating billing settings:', error);
+      throw error;
+    }
+  },
+
+  // Update advanced settings
+  updateAdvancedSettings: async (data: any): Promise<any> => {
+    try {
+      const response = await api.put(`${SETTINGS_BASE}/advanced`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating advanced settings:', error);
+      throw error;
+    }
+  },
+
+  // Create backup
+  createBackup: async (): Promise<any> => {
+    try {
+      const response = await api.post(`${SETTINGS_BASE}/backup`, {});
+      return response.data;
+    } catch (error) {
+      console.error('Error creating backup:', error);
+      throw error;
+    }
+  },
+
+  // Export data
+  exportData: async (format: string): Promise<any> => {
+    try {
+      const response = await api.post(`${SETTINGS_BASE}/export`, { format });
+      return response.data;
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      throw error;
+    }
+  },
+
+  // Get system health
+  getSystemHealth: async (): Promise<{ success: boolean; data: SystemHealth }> => {
+    try {
+      const response = await api.get(`${SETTINGS_BASE}/health`);
+      return {
+        success: response.data.success,
+        data: response.data.data || defaultSettings.systemHealth
+      };
+    } catch (error) {
+      console.error('Error fetching system health:', error);
+      throw error;
+    }
+  },
+
+  // Upload logo (multipart form)
+  uploadLogo: async (file: File): Promise<any> => {
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      
+      // Send FormData - axios interceptor will let browser handle Content-Type
+      const response = await api.post(`${SETTINGS_BASE}/logo`, formData);
+      const relative = response.data?.data?.path || response.data?.data?.logoUrl || '';
+      const absolute = relative && !String(relative).startsWith('http')
+        ? `${API_ORIGIN}${relative}`
+        : relative;
+
+      return {
+        ...response.data,
+        data: {
+          ...response.data.data,
+          path: absolute,
+          logoUrl: absolute
+        }
+      };
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      throw error;
+    }
+  },
+
+  // Regenerate API key
+  regenerateApiKey: async (): Promise<{ apiKey: string }> => {
+    try {
+      const response = await api.post(`${SETTINGS_BASE}/regenerate-key`);
+      return response.data;
+    } catch (error) {
+      console.error('Error regenerating API key:', error);
+      throw error;
+    }
+  },
+
+  // Get all settings summary
+  getSettingsSummary: async (): Promise<any> => {
+    try {
+      const response = await api.get(`${SETTINGS_BASE}/summary`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching settings summary:', error);
+      throw error;
+    }
+  },
+
+  // Reset settings to default
+  resetSettings: async (category?: string): Promise<any> => {
+    try {
+      const url = category ? `${SETTINGS_BASE}/reset/${category}` : `${SETTINGS_BASE}/reset`;
+      const response = await api.post(url);
+      return response.data;
+    } catch (error) {
+      console.error('Error resetting settings:', error);
+      throw error;
+    }
   }
 };
 

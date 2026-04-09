@@ -73,6 +73,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
 interface Payment {
   _id: string;
   receiptNumber: string;
+  paymentType?: string;
   studentName: string;
   admissionNumber: string;
   className: string;
@@ -179,6 +180,24 @@ interface StatisticsResponse {
   };
 }
 
+const normalizeReceiptNumber = (value: string = '') => {
+  let normalized = decodeURIComponent(value).trim();
+
+  if (normalized.length % 2 === 0) {
+    const half = normalized.length / 2;
+    if (normalized.slice(0, half) === normalized.slice(half)) {
+      normalized = normalized.slice(0, half);
+    }
+  }
+
+  const standardMatch = normalized.match(/(REC-\d+-\d+|CREDIT-\d+-\d+|INST-\d+-\d+)/i);
+  if (standardMatch?.[1]) {
+    return standardMatch[1];
+  }
+
+  return normalized;
+};
+
 const PaymentHistoryPage = () => {
   const navigate = useNavigate();
   
@@ -274,9 +293,37 @@ const PaymentHistoryPage = () => {
           paymentsData = data.data.payments;
           paginationData = data.data.pagination;
         }
+
+        // Defensive cleanup for mixed/legacy data:
+        // 1) remove credit-note rows
+        // 2) dedupe repeated rows by receipt/transaction/_id
+        const normalizedPayments = paymentsData.filter((payment) => {
+          const receipt = String(payment.receiptNumber || '').toUpperCase();
+          const type = String(payment.paymentType || '').toLowerCase();
+
+          if (type === 'credit') return false;
+          if (receipt.startsWith('CREDIT-')) return false;
+          return true;
+        });
+
+        const seenPaymentKeys = new Set<string>();
+        const uniquePayments = normalizedPayments.filter((payment) => {
+          const key = String(
+            payment.receiptNumber ||
+            payment.transactionId ||
+            payment._id ||
+            `${payment.studentName}-${payment.paymentDate}-${payment.amount}`
+          ).trim();
+
+          if (!key) return true;
+          if (seenPaymentKeys.has(key)) return false;
+
+          seenPaymentKeys.add(key);
+          return true;
+        });
         
         // Process payments to ensure all fields exist
-        const processedPayments = paymentsData.map(payment => ({
+        const processedPayments = uniquePayments.map(payment => ({
           ...payment,
           paymentMethod: payment.paymentMethod || 'cash',
           status: payment.status || 'completed',
@@ -319,11 +366,23 @@ const PaymentHistoryPage = () => {
         }
         
         // Extract unique payment methods and classes
-        const methods = Array.from(new Set(processedPayments.map(p => p.paymentMethod).filter(Boolean)));
-        const classes = Array.from(new Set(processedPayments.map(p => p.className).filter(Boolean)));
+        const methods = Array.from(
+          new Set(
+            processedPayments
+              .map(p => String(p.paymentMethod || '').trim())
+              .filter(method => method && method.toLowerCase() !== 'all')
+          )
+        );
+        const classes = Array.from(
+          new Set(
+            processedPayments
+              .map(p => String(p.className || '').trim())
+              .filter(className => className && className.toLowerCase() !== 'all')
+          )
+        );
         
-        if (methods.length > 0) setMethodOptions(['all', ...methods]);
-        if (classes.length > 0) setClassOptions(['all', ...classes]);
+        if (methods.length > 0) setMethodOptions(methods);
+        if (classes.length > 0) setClassOptions(classes);
         
         // Calculate method distribution
         const distribution = methods.map(method => {
@@ -546,32 +605,45 @@ const PaymentHistoryPage = () => {
   useEffect(() => {
     fetchPaymentHistory();
     fetchStatistics();
-    
+
     // Set default date range to last 30 days
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
-    
+
     setDateRange({
       start: startDate.toISOString().split('T')[0],
       end: endDate.toISOString().split('T')[0]
     });
   }, []);
+
+  // CRITICAL: Refresh payment history when window gets focus (user returns from recording payment)
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchPaymentHistory(1);
+      fetchStatistics();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
   
   // Format date time
   const formatDateTime = (dateInput: string | Date): string => {
     try {
+      if (!dateInput) return 'N/A';
       const d = new Date(dateInput);
-      if (isNaN(d.getTime())) return 'Invalid Date';
+      if (isNaN(d.getTime())) return 'N/A';
+      // Force IST (Indian Standard Time) - UTC+5:30
       return d.toLocaleString('en-IN', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
+        timeZone: 'Asia/Kolkata'
       });
     } catch (error) {
-      return 'Invalid Date';
+      return 'N/A';
     }
   };
   
@@ -644,7 +716,13 @@ const PaymentHistoryPage = () => {
   
   // View receipt in new window
   const handleViewReceipt = (receiptNumber: string) => {
-    window.open(`/finance/receipt/${receiptNumber}`, '_blank');
+    const normalizedReceiptNumber = normalizeReceiptNumber(receiptNumber);
+    if (!normalizedReceiptNumber) {
+      toast.error('Invalid receipt number');
+      return;
+    }
+
+    window.open(`/finance/receipt/${encodeURIComponent(normalizedReceiptNumber)}`, '_blank');
   };
   
   // Get avatar color based on student name
@@ -689,7 +767,15 @@ const PaymentHistoryPage = () => {
 
   // Get payment method options
   const getPaymentMethodOptions = () => {
-    const options = ['all', ...methodOptions];
+    const dynamicMethods = methodOptions
+      .map(method => String(method || '').trim())
+      .filter(Boolean)
+      .filter((method, index, array) =>
+        method.toLowerCase() !== 'all' &&
+        array.findIndex(item => item.toLowerCase() === method.toLowerCase()) === index
+      );
+
+    const options = ['all', ...dynamicMethods];
     return options.map(method => ({
       value: method,
       label: method === 'all' ? 'All Methods' : formatPaymentMethod(method)
@@ -706,7 +792,15 @@ const PaymentHistoryPage = () => {
 
   // Get class options
   const getClassOptions = () => {
-    const options = ['all', ...classOptions];
+    const dynamicClasses = classOptions
+      .map(cls => String(cls || '').trim())
+      .filter(Boolean)
+      .filter((cls, index, array) =>
+        cls.toLowerCase() !== 'all' &&
+        array.findIndex(item => item.toLowerCase() === cls.toLowerCase()) === index
+      );
+
+    const options = ['all', ...dynamicClasses];
     return options.map(cls => ({
       value: cls,
       label: cls === 'all' ? 'All Classes' : cls
@@ -923,8 +1017,8 @@ const PaymentHistoryPage = () => {
                 </div>
               </SelectTrigger>
               <SelectContent>
-                {getPaymentMethodOptions().map(option => (
-                  <SelectItem key={option.value} value={option.value}>
+                {getPaymentMethodOptions().map((option, index) => (
+                  <SelectItem key={`method-${option.value}-${index}`} value={option.value}>
                     {option.label}
                   </SelectItem>
                 ))}
@@ -936,8 +1030,8 @@ const PaymentHistoryPage = () => {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                {getStatusOptions().map(option => (
-                  <SelectItem key={option.value} value={option.value}>
+                {getStatusOptions().map((option, index) => (
+                  <SelectItem key={`status-${option.value}-${index}`} value={option.value}>
                     {option.label}
                   </SelectItem>
                 ))}
@@ -949,8 +1043,8 @@ const PaymentHistoryPage = () => {
                 <SelectValue placeholder="Class" />
               </SelectTrigger>
               <SelectContent>
-                {getClassOptions().map(option => (
-                  <SelectItem key={option.value} value={option.value}>
+                {getClassOptions().map((option, index) => (
+                  <SelectItem key={`class-${option.value}-${index}`} value={option.value}>
                     {option.label}
                   </SelectItem>
                 ))}
@@ -1089,7 +1183,8 @@ const PaymentHistoryPage = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="text-sm">{formatDateTime(payment.paymentDate)}</div>
+                          {/* CRITICAL: Show createdAt (when recorded) not paymentDate (which can be backdated) */}
+                          <div className="text-sm">{formatDateTime(payment.createdAt || payment.paymentDate)}</div>
                           <div className="text-xs text-muted-foreground truncate max-w-[150px]">
                             by {payment.recordedByName}
                           </div>
@@ -1289,9 +1384,10 @@ const PaymentHistoryPage = () => {
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Date & Time</p>
+                      <p className="text-sm text-muted-foreground">Recorded At</p>
+                      {/* CRITICAL: Show createdAt (when recorded) not paymentDate */}
                       <p className="font-medium">
-                        {formatDateTime(selectedPayment.paymentDate)}
+                        {formatDateTime(selectedPayment.createdAt || selectedPayment.paymentDate)}
                       </p>
                     </div>
                     <div>

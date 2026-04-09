@@ -1,7 +1,9 @@
 // src/services/feeDefaultersService.ts
 import axios from 'axios';
+import { getStoredToken } from '@/lib/auth/storage';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+// Use the same API URL as the rest of the app
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
 // Configure axios instance
 const apiClient = axios.create({
@@ -14,7 +16,7 @@ const apiClient = axios.create({
 // Add token interceptor
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = getStoredToken() || localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

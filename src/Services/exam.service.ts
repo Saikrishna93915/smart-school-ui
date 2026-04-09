@@ -169,6 +169,16 @@ class ExamService {
     return toApiResponse<Submission>(response);
   }
 
+  async saveProgress(examId: string, answers: Submission['answers'], timeRemaining: number): Promise<ApiResponse<any>> {
+    const response = await ApiClient.post<any>('/exams/save-progress', {
+      examId,
+      answers,
+      timeRemaining,
+      savedAt: new Date().toISOString(),
+    });
+    return toApiResponse<any>(response);
+  }
+
   async evaluateExam(examId: string): Promise<ApiResponse<void>> {
     const response = await ApiClient.post<void>(`/exams/${examId}/evaluate`);
     return toApiResponse<void>(response);
@@ -180,12 +190,12 @@ class ExamService {
   }
 
   async getMySubmissions(): Promise<ApiResponse<Submission[]>> {
-    const response = await ApiClient.get<Submission[]>('/submissions/my');
+    const response = await ApiClient.get<Submission[]>('/exams/my-submissions');
     return toApiResponse<Submission[]>(response);
   }
 
   async getSubmissionById(submissionId: string): Promise<ApiResponse<Submission>> {
-    const response = await ApiClient.get<Submission>(`/submissions/${submissionId}`);
+    const response = await ApiClient.get<Submission>(`/exams/submissions/${submissionId}`);
     return toApiResponse<Submission>(response);
   }
 
@@ -200,6 +210,11 @@ class ExamService {
     return toApiResponse<any>(response);
   }
 
+  async getAnalyticsOverview(): Promise<ApiResponse<any>> {
+    const response = await ApiClient.get<any>(`/exams/analytics/overview`);
+    return toApiResponse<any>(response);
+  }
+
   // ==================== Batch Operations ====================
   async publishResults(examId: string): Promise<ApiResponse<void>> {
     const response = await ApiClient.post<void>(`/exams/${examId}/publish-results`);
@@ -209,6 +224,64 @@ class ExamService {
   async sendNotifications(examId: string, message: string): Promise<ApiResponse<void>> {
     const response = await ApiClient.post<void>(`/exams/${examId}/notify`, { message });
     return toApiResponse<void>(response);
+  }
+
+  // ==================== Results & Certificates Operations ====================
+  async getExamResults(examId: string): Promise<ApiResponse<any>> {
+    const response = await ApiClient.get<any>(`/exams/${examId}/results`);
+    return toApiResponse<any>(response);
+  }
+
+  async getMyResults(examId: string): Promise<ApiResponse<any>> {
+    const response = await ApiClient.get<any>(`/exams/${examId}/my-results`);
+    return toApiResponse<any>(response);
+  }
+
+  async getCertificate(examId: string): Promise<ApiResponse<any>> {
+    const response = await ApiClient.get<any>(`/exams/${examId}/certificate`);
+    return toApiResponse<any>(response);
+  }
+
+  async verifyCertificate(certificateId: string): Promise<ApiResponse<any>> {
+    const response = await ApiClient.get<any>(`/certificates/${certificateId}/verify`);
+    return toApiResponse<any>(response);
+  }
+
+  async downloadCertificate(examId: string): Promise<Blob> {
+    const response = await ApiClient.get(`/exams/${examId}/certificate/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
+  // ==================== Proctoring Operations ====================
+  async logProctoringEvent(examId: string, event: any): Promise<ApiResponse<void>> {
+    const response = await ApiClient.post<void>('/exams/proctoring/log', {
+      examId,
+      ...event,
+    });
+    return toApiResponse<void>(response);
+  }
+
+  async terminateExam(examId: string, reason: string, events: any[]): Promise<ApiResponse<void>> {
+    const response = await ApiClient.post<void>('/exams/proctoring/terminate', {
+      examId,
+      reason,
+      events,
+    });
+    return toApiResponse<void>(response);
+  }
+
+  async getProctoringStatus(examId: string): Promise<ApiResponse<any>> {
+    const response = await ApiClient.get<any>(`/exams/${examId}/proctoring-status`);
+    return toApiResponse<any>(response);
+  }
+
+  async exportExamAnalytics(examId: string, format: 'excel' | 'csv' = 'excel'): Promise<Blob> {
+    const response = await ApiClient.get(`/exams/${examId}/analytics/export?format=${format}`, {
+      responseType: 'blob',
+    });
+    return response.data;
   }
 }
 

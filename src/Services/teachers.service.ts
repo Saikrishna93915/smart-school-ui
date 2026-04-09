@@ -204,12 +204,13 @@ export const TeachersService = {
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
         };
-        
+
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
         }
-        
-        const directResponse = await fetch('http://localhost:8080/api/admin/teachers', {
+
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+        const directResponse = await fetch(`${apiBaseUrl}/admin/teachers`, {
           headers,
         });
         

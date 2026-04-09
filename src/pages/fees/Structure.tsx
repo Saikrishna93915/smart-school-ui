@@ -1,5 +1,5 @@
 // src/pages/fees/Structure.tsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,80 +11,35 @@ import {
   Info,
   CheckCircle,
   AlertCircle,
-  TrendingUp
+  TrendingUp,
+  Loader2
 } from 'lucide-react';
+import { feesService, MyFeeStructure } from '@/api/services/feesService';
 
 const FeeStructure = () => {
-  const feeStructure = [
-    {
-      category: 'Tuition Fee',
-      amount: 85000,
-      description: 'Annual tuition fee for academic year 2024-25',
-      dueDate: '2024-06-15',
-      paid: 50000,
-      remaining: 35000,
-      installments: 3,
-      status: 'Partially Paid'
-    },
-    {
-      category: 'Annual Charges',
-      amount: 25000,
-      description: 'Library, laboratory, sports, and other annual facilities',
-      dueDate: '2024-04-30',
-      paid: 25000,
-      remaining: 0,
-      installments: 1,
-      status: 'Paid'
-    },
-    {
-      category: 'Transport Fee',
-      amount: 36000,
-      description: 'Annual bus transportation charges',
-      dueDate: 'Monthly',
-      paid: 30000,
-      remaining: 6000,
-      installments: 12,
-      status: 'Partially Paid'
-    },
-    {
-      category: 'Examination Fee',
-      amount: 12000,
-      description: 'Term examination and assessment charges',
-      dueDate: 'Before each term',
-      paid: 8000,
-      remaining: 4000,
-      installments: 3,
-      status: 'Partially Paid'
-    },
-    {
-      category: 'Activity Fee',
-      amount: 15000,
-      description: 'Co-curricular and extra-curricular activities',
-      dueDate: '2024-07-31',
-      paid: 0,
-      remaining: 15000,
-      installments: 2,
-      status: 'Pending'
-    }
-  ];
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [feeStructure, setFeeStructure] = useState<MyFeeStructure | null>(null);
 
-  const totalAnnual = feeStructure.reduce((sum, fee) => sum + fee.amount, 0);
-  const totalPaid = feeStructure.reduce((sum, fee) => sum + fee.paid, 0);
-  const totalRemaining = feeStructure.reduce((sum, fee) => sum + fee.remaining, 0);
-  const paidPercentage = (totalPaid / totalAnnual) * 100;
+  // Fetch fee structure on component mount
+  useEffect(() => {
+    const fetchFeeStructure = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await feesService.getMyFeeStructure();
+        setFeeStructure(data);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load fee structure';
+        setError(errorMessage);
+        console.error('Error fetching fee structure:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Paid':
-        return <Badge className="bg-green-100 text-green-800">Paid</Badge>;
-      case 'Partially Paid':
-        return <Badge className="bg-amber-100 text-amber-800">Partially Paid</Badge>;
-      case 'Pending':
-        return <Badge className="bg-red-100 text-red-800">Pending</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
+    fetchFeeStructure();
+  }, []);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -94,12 +49,71 @@ const FeeStructure = () => {
     }).format(amount);
   };
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return <Badge className="bg-green-100 text-green-800">Paid</Badge>;
+      case 'partial':
+        return <Badge className="bg-amber-100 text-amber-800">Partially Paid</Badge>;
+      case 'pending':
+        return <Badge className="bg-red-100 text-red-800">Pending</Badge>;
+      case 'overdue':
+        return <Badge className="bg-red-200 text-red-900">Overdue</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+          <p className="text-lg text-muted-foreground">Loading fee structure...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error || !feeStructure) {
+    return (
+      <div className="p-6">
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Unable to Load Fee Structure
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              {error || 'Fee structure not found for your account.'}
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Calculate summary from API data
+  const totalAnnual = feeStructure.summary?.totalFee || feeStructure.totalFee || 0;
+  const totalPaid = feeStructure.summary?.totalPaid || feeStructure.totalPaid || 0;
+  const totalRemaining = feeStructure.summary?.totalDue || feeStructure.totalDue || 0;
+  const paidPercentage = feeStructure.summary?.paidPercentage || 0;
+
   return (
     <div className="p-6">
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold">Fee Structure</h2>
-        <p className="text-muted-foreground">Detailed breakdown of fees for academic year 2024-25</p>
+        <p className="text-muted-foreground">
+          Detailed breakdown of fees for academic year {feeStructure.academicYear}
+        </p>
       </div>
 
       {/* Summary Cards */}
@@ -112,7 +126,7 @@ const FeeStructure = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalAnnual)}</div>
-            <p className="text-xs text-muted-foreground">For academic year 2024-25</p>
+            <p className="text-xs text-muted-foreground">For academic year {feeStructure.academicYear}</p>
           </CardContent>
         </Card>
 
@@ -145,6 +159,30 @@ const FeeStructure = () => {
         </Card>
       </div>
 
+      {/* Student Info */}
+      <Card className="mb-6 bg-blue-50">
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Student Name</p>
+              <p className="font-semibold">{feeStructure.studentName}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Class</p>
+              <p className="font-semibold">{feeStructure.className}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Section</p>
+              <p className="font-semibold">{feeStructure.section}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Admission Number</p>
+              <p className="font-semibold">{feeStructure.admissionNumber}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Actions */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -166,59 +204,146 @@ const FeeStructure = () => {
       {/* Fee Structure Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Fee Breakdown</CardTitle>
+          <CardTitle>Fee Breakdown by Component</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {feeStructure.map((fee, index) => (
-              <div key={index} className="border rounded-lg p-4">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="font-semibold text-lg">{fee.category}</h3>
-                      {getStatusBadge(fee.status)}
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">{fee.description}</p>
-                    <div className="flex items-center gap-4 text-sm">
-                      <span className="text-muted-foreground">Due Date: {fee.dueDate}</span>
-                      <span className="text-muted-foreground">Installments: {fee.installments}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="text-right">
-                    <div className="text-2xl font-bold mb-1">{formatCurrency(fee.amount)}</div>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-green-600">Paid: {formatCurrency(fee.paid)}</span>
+            {feeStructure.feeComponents && feeStructure.feeComponents.length > 0 ? (
+              feeStructure.feeComponents.map((fee, index) => {
+                const feeAmount = fee.amount || 0;
+                const paidAmount = fee.paidAmount || 0;
+                const remainingAmount = feeAmount - paidAmount;
+                const percentage = feeAmount > 0 ? (paidAmount / feeAmount) * 100 : 0;
+
+                return (
+                  <div key={index} className="border rounded-lg p-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <h3 className="font-semibold text-lg">{fee.componentName}</h3>
+                          {getStatusBadge(fee.status)}
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {fee.frequency} • {fee.isMandatory ? 'Mandatory' : 'Optional'}
+                        </p>
+                        {fee.dueDate && (
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className="text-muted-foreground">
+                              Due Date: {new Date(fee.dueDate).toLocaleDateString('en-IN')}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-amber-600">Remaining: {formatCurrency(fee.remaining)}</span>
+                      
+                      <div className="text-right">
+                        <div className="text-2xl font-bold mb-1">{formatCurrency(feeAmount)}</div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-green-600">Paid: {formatCurrency(paidAmount)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-amber-600">Remaining: {formatCurrency(remainingAmount)}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
+                    
+                    {/* Progress bar */}
+                    {remainingAmount > 0 && (
+                      <div className="mt-4">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Payment Progress</span>
+                          <span>{percentage.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 rounded-full"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-                
-                {/* Progress bar */}
-                {fee.remaining > 0 && (
-                  <div className="mt-4">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>Payment Progress</span>
-                      <span>{((fee.paid / fee.amount) * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-green-500 rounded-full"
-                        style={{ width: `${(fee.paid / fee.amount) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                );
+              })
+            ) : (
+              <p className="text-center text-muted-foreground py-4">No fee components found</p>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      {/* Payment Schedule - If Available */}
+      {feeStructure.paymentSchedule && feeStructure.paymentSchedule.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Payment Schedule (Installments)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-2">Installment</th>
+                    <th className="text-left py-2 px-2">Due Date</th>
+                    <th className="text-right py-2 px-2">Amount</th>
+                    <th className="text-center py-2 px-2">Status</th>
+                    <th className="text-left py-2 px-2">Receipt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feeStructure.paymentSchedule.map((schedule, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50">
+                      <td className="py-3 px-2">Phase {schedule.installmentNo}</td>
+                      <td className="py-3 px-2">
+                        {new Date(schedule.dueDate).toLocaleDateString('en-IN')}
+                      </td>
+                      <td className="text-right py-3 px-2 font-semibold">
+                        {formatCurrency(schedule.amount)}
+                      </td>
+                      <td className="text-center py-3 px-2">
+                        {getStatusBadge(schedule.status)}
+                      </td>
+                      <td className="py-3 px-2">
+                        {schedule.receiptNo ? (
+                          <span className="text-blue-600 text-xs">{schedule.receiptNo}</span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Transport Section - If Opted */}
+      {feeStructure.transportOpted && (
+        <Card className="mt-6 bg-indigo-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Transport Fee
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Annual Transport Fee</p>
+                <p className="text-2xl font-bold">{formatCurrency(feeStructure.transportFee)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <p className="text-lg font-semibold">Active</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Important Notes */}
       <Card className="mt-6">

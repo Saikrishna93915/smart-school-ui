@@ -339,9 +339,10 @@ const Receipts = () => {
               <div className="max-w-md mx-auto">
                 {/* Receipt Header */}
                 <div className="text-center mb-6">
-                  <h3 className="text-xl font-bold">AI SCHOOL ERP</h3>
+                  <h3 className="text-xl font-bold">PMC TECH SCHOOL</h3>
                   <p className="text-sm text-muted-foreground">Smart Education Institution</p>
-                  <p className="text-xs text-muted-foreground mt-1">Receipt No: REC202411001</p>
+                  <p className="text-xs text-muted-foreground mt-1">Hosur - Krishnagiri Highways, Tamil Nadu - 635 117</p>
+                  <p className="text-xs text-muted-foreground">Receipt No: REC202411001</p>
                 </div>
                 
                 {/* Receipt Details */}

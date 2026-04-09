@@ -182,7 +182,65 @@
   .shadow-glow {
     box-shadow: var(--shadow-glow);
   }
+}
 
+/* ============================================================================
+   PRINT STYLES - A4 Report Card
+   ========================================================================== */
+@media print {
+  /* Reset margins for perfect A4 fit */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide everything except the print content */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only the print component */
+  .report-card-print-container,
+  .report-card-print-container * {
+    visibility: visible;
+  }
+
+  /* Position print content at top */
+  .report-card-print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Force page break settings */
+  .report-card-print-container {
+    page-break-after: always;
+    page-break-inside: avoid;
+  }
+
+  /* Remove borders, shadows, and backgrounds that don't print well */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Ensure proper color printing */
+  .bg-blue-900,
+  .text-blue-900,
+  .border-blue-900 {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* A4 page size enforcement */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}
+
+@layer utilities {
   .glass-effect {
     @apply backdrop-blur-md bg-card/80;
   }

@@ -1,14 +1,9 @@
-// app/(dashboard)/academics/syllabus/page.tsx
-'use client';
-
-import { useState, useEffect } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -24,39 +19,24 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  ScrollArea,
+} from '@/components/ui/scroll-area';
 import {
   BookOpen,
   CheckCircle,
-  Circle,
   Clock,
-  Upload,
-  FileText,
   Plus,
-  Filter,
-  Video,
-  Image,
-  Link,
-  Download,
-  Eye,
   Edit,
   Target,
-  Users,
   Calendar,
   BarChart,
-  Settings,
   GraduationCap,
-  Globe,
-  FolderOpen,
   FileUp,
-  AlertCircle,
   X,
-  Award,
   TrendingUp,
   Search,
   ChevronDown,
-  Star,
-  Award as Trophy,
   Brain,
   Target as Bullseye,
   Lightbulb,
@@ -66,30 +46,20 @@ import {
   CalendarDays,
   UserCheck,
   Layers,
-  PieChart,
-  LineChart,
-  FileBarChart
+  FileBarChart,
+  Upload,
+  Globe,
+  Video,
+  FileText,
+  Link as LinkIcon,
+  Eye,
+  Download,
+  FolderOpen,
+  Users,
+  Settings,
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
-// Local fallback/useAuth implementation — replace with your project's actual auth hook import if available
-// If your project exposes a real hook (e.g. '@/hooks/useAuth'), replace this stub with that import.
-type AuthRole = 'teacher' | 'student' | 'parent' | 'admin' | 'principal' | string;
-type AuthUser = { id?: string; name?: string; email?: string } | null;
-
-function useAuth() {
-  // Simple client-side stub. Integrate with your auth provider or replace with real hook.
-  const [user, setUser] = useState<AuthUser>(null);
-  const [role, setRole] = useState<AuthRole>('teacher');
-
-  useEffect(() => {
-    // Example initialization — modify to read actual auth state.
-    setUser({ id: 'demo', name: 'Demo User', email: 'demo@example.com' });
-    setRole('teacher');
-  }, []);
-
-  return { user, role };
-}
-import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Local fallback date formatter used by this page (use project's util if available)
 function formatDate(dateStr: string) {
@@ -204,22 +174,8 @@ const SUBJECT_CATEGORIES = {
   vocational: ['Computer Science', 'Physical Education', 'Home Science']
 };
 
-const statusStyles = {
-  completed: 'text-success',
-  current: 'text-primary animate-pulse',
-  pending: 'text-muted-foreground',
-  'in-progress': 'text-warning',
-};
-
-const statusIcons = {
-  completed: CheckCircle,
-  current: Clock,
-  pending: Circle,
-  'in-progress': Clock,
-};
-
 export default function SilverSandLessons() {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
   const [board, setBoard] = useState('cbse');
   const [selectedClass, setSelectedClass] = useState('10');
   const [subject, setSubject] = useState('math');
@@ -227,8 +183,6 @@ export default function SilverSandLessons() {
   const [activeTab, setActiveTab] = useState('curriculum');
   const [selectedSubjectCategory, setSelectedSubjectCategory] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Calculate overall progress
   const totalChapters = syllabusData.length;
@@ -239,9 +193,6 @@ export default function SilverSandLessons() {
   // Calculate additional stats
   const totalContentItems = syllabusData.reduce((acc, chapter) => 
     acc + chapter.lessons.reduce((lessonAcc, lesson) => lessonAcc + lesson.content.length, 0), 0);
-  
-  const pendingAssignments = syllabusData.reduce((acc, chapter) => 
-    acc + chapter.lessons.filter(lesson => lesson.status === 'current' || lesson.status === 'pending').length, 0);
 
   // Filter syllabus data based on search
   const filteredSyllabusData = syllabusData.filter(chapter =>
@@ -253,39 +204,10 @@ export default function SilverSandLessons() {
     )
   );
 
-  // Handle file upload
-  const handleFileUpload = async (file: File, lessonId: string) => {
-    setUploading(true);
-    setUploadProgress(0);
-    
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(interval);
-          return 90;
-        }
-        return prev + 10;
-      });
-    }, 200);
-
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setUploadProgress(100);
-      toast.success('File uploaded successfully!');
-    } catch (error) {
-      toast.error('Upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-      setTimeout(() => setUploadProgress(0), 500);
-    }
-  };
-
   // Permission checks based on role
-  const canEdit = ['teacher', 'admin', 'principal'].includes(role);
-  const canUpload = ['teacher', 'admin'].includes(role);
-  const canViewAnalytics = ['teacher', 'admin', 'principal', 'parent'].includes(role);
+  const canEdit = ['teacher', 'admin', 'principal'].includes(user?.role || '');
+  const canUpload = ['teacher', 'admin'].includes(user?.role || '');
+  const canViewAnalytics = ['teacher', 'admin', 'principal', 'parent'].includes(user?.role || '');
 
   return (
    
@@ -300,9 +222,9 @@ export default function SilverSandLessons() {
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">SilverSand Lessons</h1>
                 <p className="text-muted-foreground">
-                  {role === 'teacher' ? 'Manage curriculum and deliver lessons' :
-                   role === 'student' ? 'Track your learning journey' :
-                   role === 'parent' ? 'Monitor academic progress' :
+                  {user?.role === 'teacher' ? 'Manage curriculum and deliver lessons' :
+                   user?.role === 'student' ? 'Track your learning journey' :
+                   user?.role === 'parent' ? 'Monitor academic progress' :
                    'Comprehensive syllabus management system'}
                 </p>
               </div>
@@ -621,7 +543,6 @@ export default function SilverSandLessons() {
                                     Lessons ({chapter.lessons.length})
                                   </h4>
                                   {chapter.lessons.map((lesson) => {
-                                    const Icon = statusIcons[lesson.status as keyof typeof statusIcons];
                                     return (
                                       <div key={lesson.id} className="border rounded-lg p-4 hover:bg-muted/30 transition-colors">
                                         <div className="flex items-start justify-between">
@@ -672,8 +593,8 @@ export default function SilverSandLessons() {
                                                       switch (type) {
                                                         case 'video': return Video;
                                                         case 'pdf': return FileText;
-                                                        case 'image': return Image;
-                                                        default: return Link;
+                                                        case 'image': return FileText;
+                                                        default: return LinkIcon;
                                                       }
                                                     };
                                                     const ContentIcon = getContentIcon(item.type);
@@ -710,7 +631,7 @@ export default function SilverSandLessons() {
                                             )}
 
                                             {/* Teacher Notes (Visible only to teachers/admins) */}
-                                            {role === 'teacher' && lesson.teacherNotes && (
+                                            {user?.role === 'teacher' && lesson.teacherNotes && (
                                               <div className="mt-4 p-3 bg-warning/10 border border-warning/20 rounded">
                                                 <p className="text-xs font-medium text-warning mb-1 flex items-center gap-1">
                                                   <Edit className="h-3 w-3" />
@@ -813,16 +734,6 @@ export default function SilverSandLessons() {
                           <p className="text-sm font-medium">Drop teaching materials here</p>
                           <p className="text-xs text-muted-foreground mt-1">PDF, PPT, Videos, Images up to 100MB</p>
                         </div>
-                        
-                        {uploading && (
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>Uploading...</span>
-                              <span>{uploadProgress}%</span>
-                            </div>
-                            <Progress value={uploadProgress} className="h-2" />
-                          </div>
-                        )}
 
                         <div className="grid grid-cols-2 gap-2">
                           <Button variant="outline" size="sm" className="w-full">
@@ -830,7 +741,7 @@ export default function SilverSandLessons() {
                             Record Video
                           </Button>
                           <Button variant="outline" size="sm" className="w-full">
-                            <Link className="h-3 w-3 mr-2" />
+                            <LinkIcon className="h-3 w-3 mr-2" />
                             Add Link
                           </Button>
                         </div>

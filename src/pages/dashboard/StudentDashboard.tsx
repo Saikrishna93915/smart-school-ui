@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { UserCheck, BookOpen, Trophy, Calendar, Clock, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { UserCheck, BookOpen, Trophy, Calendar, Clock, ChevronRight, ArrowRight } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 
 // Static data (unchanged)
@@ -38,6 +40,7 @@ const achievements = [
 ];
 
 export default function StudentDashboard() {
+  const navigate = useNavigate();
   const [studentData, setStudentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -50,7 +53,8 @@ export default function StudentDashboard() {
           throw new Error('No authentication token found');
         }
 
-        const response = await axios.get('http://localhost:8080/api/student/me', {
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+        const response = await axios.get(`${apiBaseUrl}/student/me`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -143,16 +147,29 @@ export default function StudentDashboard() {
         )}
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid + Attendance Button */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Attendance"
-          value="92%"
-          subtitle="This semester"
-          icon={UserCheck}
-          trend={{ value: 2.5, isPositive: true }}
-          variant="success"
-        />
+        {/* Attendance Card - Clickable */}
+        <Card className="cursor-pointer hover:shadow-lg transition-all hover:border-blue-400" >
+          <CardContent className="pt-6" onClick={() => navigate('/student/attendance')}>
+            <div className="flex flex-col items-center justify-center text-center">
+              <div className="rounded-full bg-green-100 p-3 mb-3">
+                <UserCheck className="h-6 w-6 text-green-600" />
+              </div>
+              <h3 className="font-semibold text-lg">Attendance</h3>
+              <p className="text-3xl font-bold text-green-600 mt-2">92%</p>
+              <p className="text-xs text-muted-foreground mt-1">This semester</p>
+              <Button 
+                className="w-full mt-4"
+                onClick={() => navigate('/student/attendance')}
+              >
+                View Details
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Overall Grade */}
         <StatCard
           title="Overall Grade"
           value="A"
@@ -240,6 +257,15 @@ export default function StudentDashboard() {
                 )}
               </div>
             ))}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full mt-4"
+              onClick={() => navigate('/timetable')}
+            >
+              View Weekly Timetable
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
           </CardContent>
         </Card>
       </div>

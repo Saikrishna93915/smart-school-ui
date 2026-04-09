@@ -1,6 +1,7 @@
 /**
  * Payment service for handling financial transactions
  */
+import { getStoredToken, getStoredUser } from '@/lib/auth/storage';
 
 export interface PaymentRecord {
     id: string;
@@ -247,13 +248,19 @@ export interface PaymentRecord {
     }
     
     private getAuthToken(): string {
-      // In real implementation, get from auth context or localStorage
-      return localStorage.getItem('authToken') || '';
+      return getStoredToken() || '';
     }
     
     private getCurrentUser(): string {
-      // In real implementation, get from auth context
-      return 'admin@school.com';
+      const rawUser = getStoredUser();
+      if (!rawUser) return 'system';
+
+      try {
+        const user = JSON.parse(rawUser) as { email?: string; name?: string; role?: string };
+        return user.email || user.name || user.role || 'system';
+      } catch {
+        return 'system';
+      }
     }
   }
   

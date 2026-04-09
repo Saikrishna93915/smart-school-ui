@@ -16,6 +16,9 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  IndianRupee,
+  UserCog,
+  Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +32,9 @@ const roleOptions: {
   { role: "teacher", icon: GraduationCap, description: "Classes & attendance" },
   { role: "parent", icon: Users, description: "Track child progress" },
   { role: "student", icon: BookOpen, description: "Access learning portal" },
+  { role: "cashier", icon: IndianRupee, description: "Fee collection" },
+  { role: "principal", icon: UserCog, description: "School overview" },
+  { role: "driver", icon: Truck, description: "Transport management" },
 ];
 
 export default function Login() {
@@ -56,7 +62,18 @@ export default function Login() {
         variant: "default",
       });
       
-      navigate("/dashboard");
+      const dashboardPaths: Record<string, string> = {
+        admin: "/dashboard/admin",
+        owner: "/dashboard",
+        teacher: "/dashboard/teacher",
+        student: "/dashboard/student",
+        parent: "/dashboard",
+        accountant: "/finance/collections",
+        cashier: "/cashier/dashboard",
+        principal: "/principal/dashboard",
+        driver: "/driver/dashboard",
+      };
+      navigate(dashboardPaths[selectedRole] ?? "/dashboard");
     } catch (err: any) {
       // ✅ TOP-RIGHT ERROR POP-UP
       toast({
@@ -71,6 +88,7 @@ export default function Login() {
   };
 
   const isEmailRole = selectedRole === "admin" || selectedRole === "owner" || selectedRole === "teacher";
+  const isDriverRole = selectedRole === "driver";
 
   return (
     <div className="min-h-screen flex bg-slate-50">
@@ -128,7 +146,7 @@ export default function Login() {
             {/* ROLE SELECTION */}
             <div className="space-y-4">
               <Label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">Select Identity</Label>
-              <div className="grid grid-cols-5 gap-3">
+              <div className="grid grid-cols-4 gap-2">
                 {roleOptions.map(({ role, icon: Icon }) => (
                   <button
                     key={role}
@@ -153,11 +171,21 @@ export default function Login() {
             {/* IDENTIFIER */}
             <div className="space-y-2">
               <Label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">
-                {selectedRole === "student" ? "Admission Number" : "Email Address"}
+                {selectedRole === "student" ? "Admission Number" : selectedRole === "parent" || selectedRole === "teacher" ? "Email or Phone" : selectedRole === "driver" ? "Phone or Username" : "Email Address"}
               </Label>
               <Input
-                type={isEmailRole ? "email" : "text"}
-                placeholder={selectedRole === "student" ? "ADM-2025-001" : "name@school.edu"}
+                type="text"
+                placeholder={
+                  selectedRole === "student" 
+                    ? "ADM-2025-001" 
+                    : selectedRole === "parent"
+                    ? "parent@email.com or 9876543210"
+                    : selectedRole === "teacher"
+                    ? "teacher@email.com or 9876543210"
+                    : selectedRole === "driver"
+                    ? "driver001 or phone number"
+                    : "name@school.edu"
+                }
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="h-14 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-all text-lg font-bold"

@@ -1,5 +1,5 @@
 // components/dashboard/Exams/CreateExamDialog.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useExam } from '@/hooks/useExam';
 import { toast } from 'sonner';
+import QuestionBuilder, { BuilderQuestion } from '@/components/dashboard/Exams/QuestionBuilder';
 
 // Define local interface that matches your form requirements
 interface CreateExamFormData {
@@ -45,11 +46,56 @@ interface CreateExamFormData {
   instructions: string[];
 }
 
+const createEmptyQuestion = (): BuilderQuestion => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  type: 'mcq',
+  question: '',
+  options: ['', '', '', ''],
+  correctAnswer: '',
+  correctAnswers: [],
+  marks: 1,
+  expanded: true,
+});
+
+const createQuestionFromExisting = (question: any): BuilderQuestion => {
+  const normalizedType =
+    question?.type === 'multi-correct'
+      ? 'multi_select'
+      : question?.type === 'truefalse'
+      ? 'true_false'
+      : question?.type === 'short'
+      ? 'short_answer'
+      : question?.type === 'long'
+      ? 'long_answer'
+      : question?.type === 'fillblank'
+      ? 'fill_blank'
+      : 'mcq';
+
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type: normalizedType as BuilderQuestion['type'],
+    question: question?.text || '',
+    options:
+      Array.isArray(question?.options) && question.options.length > 0
+        ? question.options
+        : ['', '', '', ''],
+    correctAnswer:
+      question?.correctAnswer !== undefined && question?.correctAnswer !== null
+        ? String(question.correctAnswer)
+        : '',
+    correctAnswers: Array.isArray(question?.correctAnswers) ? question.correctAnswers : [],
+    marks: Number(question?.marks || 1),
+    expanded: true,
+  };
+};
+
 interface CreateExamDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   onError?: (error: string) => void;
+  initialData?: any;
+  mode?: 'create' | 'edit';
 }
 
 const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
@@ -57,8 +103,10 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
   onOpenChange,
   onSuccess,
   onError,
+  initialData,
+  mode = 'create',
 }) => {
-  const { createExam } = useExam();
+  const { createExam, updateExam } = useExam();
   const [formData, setFormData] = useState<CreateExamFormData>({
     name: '',
     className: '',
@@ -79,6 +127,10 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
   });
   const [localError, setLocalError] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [questions, setQuestions] = useState<BuilderQuestion[]>([]);
+  const [questionErrors, setQuestionErrors] = useState<Record<string, string>>({});
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
 
   const classes = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
   const sections = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -92,6 +144,140 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
     { value: 'ongoing', label: 'Active' },
     { value: 'completed', label: 'Completed' }
   ];
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (mode === 'edit' && initialData) {
+      const extractedQuestions =
+        initialData?.subjectGroups?.flatMap((group: any) =>
+          (group?.questions || []).map((q: any) => createQuestionFromExisting(q))
+        ) || [];
+
+      const existingClassTargets = Array.isArray(initialData.classTargets)
+        ? initialData.classTargets
+        : [];
+
+      const classesFromTargets = existingClassTargets
+        .map((target: any) => String(target?.className || '').trim())
+        .filter(Boolean);
+
+      const sectionsFromTargets = Array.from(
+        new Set(
+          existingClassTargets.flatMap((target: any) =>
+            Array.isArray(target?.sections)
+              ? target.sections.map((s: string) => String(s || '').trim()).filter(Boolean)
+              : []
+          )
+        )
+      );
+
+      const primaryClass = String(initialData.className || classesFromTargets[0] || '');
+      const primarySection = String(initialData.section || sectionsFromTargets[0] || '');
+
+      setFormData({
+        name: initialData.name || '',
+        className: primaryClass,
+        section: primarySection,
+        subject: initialData.subject || '',
+        description: initialData.description || '',
+        duration: Number(initialData.duration || initialData.durationMinutes || 60),
+        status: initialData.status || 'scheduled',
+        pattern: initialData.pattern || 'simple',
+        date:
+          initialData.date ||
+          (initialData.examDate ? new Date(initialData.examDate).toISOString().split('T')[0] : ''),
+        startTime: initialData.startTime || '09:00',
+        endTime: initialData.endTime || '10:00',
+        shuffleQuestions: Boolean(initialData.shuffleQuestions),
+        shuffleOptions: Boolean(initialData.shuffleOptions),
+        allowReview: initialData.allowReview !== false,
+        maxAttempts: Number(initialData.maxAttempts || 1),
+        instructions: Array.isArray(initialData.instructions) ? initialData.instructions : [],
+      });
+
+      setSelectedClasses(
+        Array.from(new Set([primaryClass, ...classesFromTargets].filter(Boolean)))
+      );
+      setSelectedSections(
+        Array.from(new Set([primarySection, ...sectionsFromTargets].filter(Boolean)))
+      );
+      setQuestions(extractedQuestions);
+      setQuestionErrors({});
+      setLocalError('');
+      return;
+    }
+
+    setFormData({
+      name: '',
+      className: '',
+      section: '',
+      subject: '',
+      description: '',
+      duration: 60,
+      status: 'scheduled',
+      pattern: 'simple',
+      date: '',
+      startTime: '09:00',
+      endTime: '10:00',
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      allowReview: true,
+      maxAttempts: 1,
+      instructions: [],
+    });
+    setSelectedClasses([]);
+    setSelectedSections([]);
+    setQuestions([]);
+    setQuestionErrors({});
+    setLocalError('');
+  }, [open, mode, initialData]);
+
+  useEffect(() => {
+    if (formData.className && !selectedClasses.includes(formData.className)) {
+      setSelectedClasses((prev) => [...prev, formData.className]);
+    }
+  }, [formData.className, selectedClasses]);
+
+  useEffect(() => {
+    if (formData.section && !selectedSections.includes(formData.section)) {
+      setSelectedSections((prev) => [...prev, formData.section]);
+    }
+  }, [formData.section, selectedSections]);
+
+  const toggleClass = (className: string) => {
+    setSelectedClasses((prev) => {
+      const exists = prev.includes(className);
+      const next = exists ? prev.filter((item) => item !== className) : [...prev, className];
+
+      if (!exists && !formData.className) {
+        setFormData((current) => ({ ...current, className }));
+      }
+
+      if (exists && formData.className === className) {
+        setFormData((current) => ({ ...current, className: next[0] || '' }));
+      }
+
+      return next;
+    });
+  };
+
+  const toggleSection = (section: string) => {
+    setSelectedSections((prev) => {
+      const exists = prev.includes(section);
+      const next = exists ? prev.filter((item) => item !== section) : [...prev, section];
+
+      if (!exists && !formData.section) {
+        setFormData((current) => ({ ...current, section }));
+      }
+
+      if (exists && formData.section === section) {
+        setFormData((current) => ({ ...current, section: next[0] || '' }));
+      }
+
+      return next;
+    });
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -128,6 +314,14 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
       setLocalError('Section is required');
       return false;
     }
+    if (selectedClasses.length === 0) {
+      setLocalError('Select at least one target class');
+      return false;
+    }
+    if (selectedSections.length === 0) {
+      setLocalError('Select at least one target section');
+      return false;
+    }
     if (!formData.subject) {
       setLocalError('Subject is required');
       return false;
@@ -140,15 +334,105 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
       setLocalError('Exam date is required');
       return false;
     }
+
+    if (questions.length === 0) {
+      setLocalError('Add at least one question before creating exam');
+      return false;
+    }
+
+    const nextErrors: Record<string, string> = {};
+
+    questions.forEach((question) => {
+      const prefix = `question_${question.id}`;
+
+      if (!question.question.trim()) {
+        nextErrors[`${prefix}_question`] = 'Question text is required';
+      }
+
+      if (!question.marks || question.marks <= 0) {
+        nextErrors[`${prefix}_marks`] = 'Marks must be greater than 0';
+      }
+
+      if (question.type === 'mcq' || question.type === 'multi_select') {
+        const nonEmptyOptions = question.options.filter((opt) => opt.trim().length > 0);
+        if (nonEmptyOptions.length < 2) {
+          nextErrors[`${prefix}_options`] = 'At least 2 options are required';
+        }
+      }
+
+      if (question.type === 'mcq' && `${question.correctAnswer}`.trim() === '') {
+        nextErrors[`${prefix}_correct`] = 'Select one correct answer';
+      }
+
+      if (question.type === 'multi_select' && question.correctAnswers.length === 0) {
+        nextErrors[`${prefix}_correct`] = 'Select at least one correct answer';
+      }
+
+      if (question.type === 'fill_blank' && `${question.correctAnswer}`.trim() === '') {
+        nextErrors[`${prefix}_correct`] = 'Correct answer is required';
+      }
+    });
+
+    setQuestionErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      setLocalError('Please fix question validation errors');
+      return false;
+    }
+
     return true;
   };
 
   const formatFormDataForApi = (): any => {
+    const mappedQuestions = questions.map((question) => {
+      const baseQuestion: any = {
+        type:
+          question.type === 'multi_select'
+            ? 'multi-correct'
+            : question.type === 'true_false'
+            ? 'truefalse'
+            : question.type === 'short_answer'
+            ? 'short'
+            : question.type === 'long_answer'
+            ? 'long'
+            : question.type === 'fill_blank'
+            ? 'fillblank'
+            : 'mcq',
+        text: question.question.trim(),
+        marks: question.marks,
+        difficulty: 'medium',
+      };
+
+      if (question.type === 'mcq' || question.type === 'multi_select') {
+        baseQuestion.options = question.options.map((opt) => opt.trim());
+      }
+
+      if (question.type === 'mcq') {
+        baseQuestion.correctAnswer = Number(question.correctAnswer);
+      }
+
+      if (question.type === 'multi_select') {
+        baseQuestion.correctAnswers = question.correctAnswers;
+      }
+
+      if (question.type === 'true_false') {
+        baseQuestion.correctAnswer = Boolean(question.correctAnswer);
+      }
+
+      if (question.type === 'short_answer' || question.type === 'fill_blank') {
+        baseQuestion.correctAnswer = `${question.correctAnswer}`.trim();
+      }
+
+      return baseQuestion;
+    });
+
+    const totalMarks = mappedQuestions.reduce((sum: number, q: any) => sum + (q.marks || 0), 0);
+
     // Transform form data to match your API requirements
     const apiData: any = {
       name: formData.name.trim(),
-      className: formData.className,
-      section: formData.section,
+      className: selectedClasses[0] || formData.className,
+      section: selectedSections[0] || formData.section,
       subject: formData.subject,
       description: formData.description?.trim() || '',
       duration: formData.duration, // Your API might expect 'duration' not 'durationMinutes'
@@ -160,6 +444,18 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
       allowReview: formData.allowReview,
       maxAttempts: formData.maxAttempts,
       instructions: formData.instructions,
+      subjectGroups: [
+        {
+          subjectName: formData.subject,
+          totalMarks,
+          passingMarks: Math.ceil(totalMarks * 0.4),
+          questions: mappedQuestions,
+        },
+      ],
+      classTargets: selectedClasses.map((className) => ({
+        className,
+        sections: selectedSections,
+      })),
     };
 
     // Add date field (your API might expect 'date' or 'examDate')
@@ -191,10 +487,13 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
       const examData = formatFormDataForApi();
       console.log('📤 Sending to API:', examData);
       
-      // Call createExam
-      await createExam(examData);
-      
-      toast.success('Exam created successfully!');
+      if (mode === 'edit' && initialData?._id) {
+        await updateExam({ id: initialData._id, updates: examData });
+      } else {
+        await createExam(examData);
+      }
+
+      toast.success(mode === 'edit' ? 'Exam updated successfully!' : 'Exam created successfully!');
       
       // Reset form
       setFormData({
@@ -215,6 +514,10 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
         maxAttempts: 1,
         instructions: [],
       });
+      setQuestions([]);
+      setSelectedClasses([]);
+      setSelectedSections([]);
+      setQuestionErrors({});
       
       // Call success callback
       if (onSuccess) onSuccess();
@@ -228,7 +531,7 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
       const errorMessage = err.message || 'Failed to create exam';
       setLocalError(errorMessage);
       
-      toast.error(`Failed to create exam: ${errorMessage}`);
+      toast.error(`Failed to ${mode === 'edit' ? 'update' : 'create'} exam: ${errorMessage}`);
       
       // Call error callback
       if (onError) onError(errorMessage);
@@ -258,7 +561,30 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
       instructions: [],
     });
     setLocalError('');
+    setQuestionErrors({});
+    setQuestions([]);
+    setSelectedClasses([]);
+    setSelectedSections([]);
     onOpenChange(false);
+  };
+
+  const handleAddQuestion = () => {
+    setQuestions((prev) => [...prev, createEmptyQuestion()]);
+  };
+
+  const handleRemoveQuestion = (id: string) => {
+    setQuestions((prev) => prev.filter((q) => q.id !== id));
+    setQuestionErrors((prev) => {
+      const next = { ...prev };
+      Object.keys(next)
+        .filter((key) => key.startsWith(`question_${id}_`))
+        .forEach((key) => delete next[key]);
+      return next;
+    });
+  };
+
+  const handleUpdateQuestion = (id: string, updates: Partial<BuilderQuestion>) => {
+    setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...updates } : q)));
   };
 
   // Get today's date in YYYY-MM-DD format for date input min
@@ -268,9 +594,11 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl">Create New Exam</DialogTitle>
+          <DialogTitle className="text-2xl">{mode === 'edit' ? 'Edit Exam' : 'Create New Exam'}</DialogTitle>
           <DialogDescription>
-            Create a new exam for your students. Fill in all required fields marked with *.
+            {mode === 'edit'
+              ? 'Update exam details, schedule, and class targeting.'
+              : 'Create a new exam for your students. Fill in all required fields marked with *.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -389,6 +717,50 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Target Multiple Classes</Label>
+                <div className="flex flex-wrap gap-2">
+                  {classes.map((className) => (
+                    <Button
+                      key={`multi-class-${className}`}
+                      type="button"
+                      size="sm"
+                      variant={selectedClasses.includes(className) ? 'default' : 'outline'}
+                      onClick={() => toggleClass(className)}
+                      disabled={isSubmitting}
+                    >
+                      Class {className}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500">
+                  Selected classes: {selectedClasses.length > 0 ? selectedClasses.join(', ') : 'None'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Target Multiple Sections</Label>
+                <div className="flex flex-wrap gap-2">
+                  {sections.map((section) => (
+                    <Button
+                      key={`multi-section-${section}`}
+                      type="button"
+                      size="sm"
+                      variant={selectedSections.includes(section) ? 'default' : 'outline'}
+                      onClick={() => toggleSection(section)}
+                      disabled={isSubmitting}
+                    >
+                      Section {section}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500">
+                  Selected sections: {selectedSections.length > 0 ? selectedSections.join(', ') : 'None'}
+                </p>
               </div>
             </div>
           </div>
@@ -549,6 +921,25 @@ const CreateExamDialog: React.FC<CreateExamDialogProps> = ({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <Separator />
+
+          <QuestionBuilder
+            questions={questions}
+            onAddQuestion={handleAddQuestion}
+            onRemoveQuestion={handleRemoveQuestion}
+            onUpdateQuestion={handleUpdateQuestion}
+            errors={questionErrors}
+          />
+
+          <div className="rounded-md bg-muted/60 px-4 py-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Total Questions: {questions.length}</span>
+              <span>
+                Total Marks: {questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
+              </span>
+            </div>
           </div>
 
           {/* Actions */}

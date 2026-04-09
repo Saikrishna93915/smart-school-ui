@@ -1,79 +1,53 @@
 // src/pages/fees/Dues.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import {
   AlertCircle,
   Calendar,
-  Clock,
-  CreditCard,
-  Download,
+  Loader2,
+  CheckCircle,
   TrendingUp,
   Info,
-  CheckCircle,
-  Mail,
-  Phone
+  Clock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { feesService, StudentDue, StudentDuesResponse } from '@/api/services/feesService';
+import { useToast } from '@/hooks/use-toast';
 
 const CurrentDues = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [duesData, setDuesData] = useState<StudentDuesResponse | null>(null);
   const [selectedDues, setSelectedDues] = useState<number[]>([]);
-  
-  const duesData = [
-    {
-      id: 1,
-      feeType: 'Tuition Fee - Installment 3',
-      dueDate: '2024-12-15',
-      daysRemaining: 15,
-      amount: 15000,
-      penalty: 0,
-      total: 15000,
-      status: 'Pending',
-      priority: 'High'
-    },
-    {
-      id: 2,
-      feeType: 'Transport Fee - December',
-      dueDate: '2024-12-05',
-      daysRemaining: 5,
-      amount: 3000,
-      penalty: 150,
-      total: 3150,
-      status: 'Overdue',
-      priority: 'Critical'
-    },
-    {
-      id: 3,
-      feeType: 'Examination Fee - Term 2',
-      dueDate: '2024-12-25',
-      daysRemaining: 25,
-      amount: 4000,
-      penalty: 0,
-      total: 4000,
-      status: 'Pending',
-      priority: 'Medium'
-    },
-    {
-      id: 4,
-      feeType: 'Activity Fee - Installment 1',
-      dueDate: '2024-12-30',
-      daysRemaining: 30,
-      amount: 7500,
-      penalty: 0,
-      total: 7500,
-      status: 'Pending',
-      priority: 'Low'
-    }
-  ];
 
-  const totalDues = duesData.reduce((sum, due) => sum + due.total, 0);
-  const overdueAmount = duesData.filter(d => d.status === 'Overdue').reduce((sum, due) => sum + due.total, 0);
-  const pendingAmount = duesData.filter(d => d.status === 'Pending').reduce((sum, due) => sum + due.total, 0);
-  const criticalDues = duesData.filter(d => d.priority === 'Critical').length;
+  // Fetch student dues on mount
+  useEffect(() => {
+    const fetchDues = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await feesService.getStudentDues();
+        setDuesData(data);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load dues';
+        setError(errorMessage);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDues();
+  }, [toast]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -83,294 +57,301 @@ const CurrentDues = () => {
     }).format(amount);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
-
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case 'Critical':
-        return <Badge className="bg-red-100 text-red-800">Critical</Badge>;
-      case 'High':
-        return <Badge className="bg-orange-100 text-orange-800">High</Badge>;
-      case 'Medium':
-        return <Badge className="bg-yellow-100 text-yellow-800">Medium</Badge>;
-      case 'Low':
-        return <Badge className="bg-blue-100 text-blue-800">Low</Badge>;
-      default:
-        return <Badge variant="outline">{priority}</Badge>;
+  const getStatusBadge = (status: string, daysOverdue: number) => {
+    if (status === 'paid') {
+      return <Badge className="bg-green-100 text-green-800">Paid</Badge>;
     }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Overdue':
-        return <Badge className="bg-red-100 text-red-800">Overdue</Badge>;
-      case 'Pending':
-        return <Badge className="bg-amber-100 text-amber-800">Pending</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+    if (status === 'overdue') {
+      return <Badge className="bg-red-200 text-red-900">Overdue by {daysOverdue} days</Badge>;
     }
+    return <Badge className="bg-amber-100 text-amber-800">Pending</Badge>;
   };
 
-  const handleSelectDues = (id: number) => {
-    setSelectedDues(prev => 
-      prev.includes(id) 
-        ? prev.filter(dueId => dueId !== id)
-        : [...prev, id]
+  const getPriorityColor = (daysOverdue: number, status: string) => {
+    if (status === 'paid') return 'border-l-4 border-l-green-500';
+    if (daysOverdue > 30) return 'border-l-4 border-l-red-600';
+    if (daysOverdue > 0) return 'border-l-4 border-l-orange-500';
+    return 'border-l-4 border-l-amber-500';
+  };
+
+  const toggleDueSelection = (installmentNo: number) => {
+    setSelectedDues((prev) =>
+      prev.includes(installmentNo)
+        ? prev.filter((id) => id !== installmentNo)
+        : [...prev, installmentNo]
     );
   };
 
+  const calculateSelectedTotal = () => {
+    if (!duesData) return 0;
+    return duesData.dues.penalties
+      .filter((p) => selectedDues.includes(p.installmentNo))
+      .reduce((sum, p) => sum + p.total, 0);
+  };
+
   const handlePaySelected = () => {
-    const selectedAmount = duesData
-      .filter(due => selectedDues.includes(due.id))
-      .reduce((sum, due) => sum + due.total, 0);
-    
-    navigate('/fees/pay', { 
-      state: { 
-        selectedDues,
-        amount: selectedAmount
-      }
-    });
+    const total = calculateSelectedTotal();
+    if (total > 0) {
+      navigate('/fees/pay', { state: { amount: total, selectedDues } });
+    }
   };
 
   const handlePayAll = () => {
-    navigate('/fees/pay', { 
-      state: { 
-        selectedDues: duesData.map(due => due.id),
-        amount: totalDues
-      }
-    });
+    if (duesData?.dues.totalWithPenalty) {
+      navigate('/fees/pay', { state: { amount: duesData.dues.totalWithPenalty } });
+    }
   };
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+          <p className="text-lg text-muted-foreground">Loading your dues...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error || !duesData) {
+    return (
+      <div className="p-6">
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Unable to Load Dues
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              {error || 'Unable to fetch your fee dues.'}
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold">Current Dues</h2>
-        <p className="text-muted-foreground">Track and manage your pending fee payments</p>
+      <div>
+        <h2 className="text-2xl font-bold">Your Fee Dues</h2>
+        <p className="text-muted-foreground">
+          Manage your pending payments and installments
+        </p>
       </div>
 
+      {/* No dues state */}
+      {duesData.dues.totalDue === 0 ? (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="pt-6 text-center">
+            <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-green-900 mb-2">All Fees Paid</h3>
+            <p className="text-green-700">Congratulations! Your fees are fully paid for the academic year.</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Dues
+              Total Pending
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-amber-600">
-              {formatCurrency(totalDues)}
+              {formatCurrency(duesData.dues.totalDue)}
             </div>
-            <p className="text-xs text-muted-foreground">{duesData.length} pending items</p>
+            <p className="text-xs text-muted-foreground">Before penalties</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Overdue Amount
+              Late Penalties
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {formatCurrency(overdueAmount)}
+              {formatCurrency(duesData.dues.totalPenalty)}
             </div>
-            <p className="text-xs text-muted-foreground">Immediate attention required</p>
+            <p className="text-xs text-muted-foreground">{duesData.dues.penalties.filter(p => p.penalty > 0).length} installments</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Critical Dues
+              Total Amount Due
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{criticalDues}</div>
-            <p className="text-xs text-muted-foreground">Need immediate payment</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Days Until Next Due
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">5</div>
-            <p className="text-xs text-muted-foreground">Transport fee due soon</p>
+            <div className="text-2xl font-bold text-red-700">
+              {formatCurrency(duesData.dues.totalWithPenalty)}
+            </div>
+            <p className="text-xs text-muted-foreground">Including penalties</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Action Bar */}
-      <Card className="mb-6">
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Student Info */}
+      <Card className="bg-blue-50">
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <p className="font-medium mb-1">Selected: {selectedDues.length} items</p>
-              <p className="text-sm text-muted-foreground">
-                Total amount: {formatCurrency(
-                  duesData.filter(due => selectedDues.includes(due.id))
-                    .reduce((sum, due) => sum + due.total, 0)
-                )}
-              </p>
+              <p className="text-xs text-muted-foreground">Name</p>
+              <p className="font-semibold">{duesData.student.name}</p>
             </div>
-            <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                onClick={() => setSelectedDues([])}
-                disabled={selectedDues.length === 0}
-              >
-                Clear Selection
-              </Button>
-              <Button 
-                onClick={handlePaySelected}
-                disabled={selectedDues.length === 0}
-              >
-                <CreditCard className="h-4 w-4 mr-2" />
-                Pay Selected
-              </Button>
-              <Button onClick={handlePayAll}>
-                <CreditCard className="h-4 w-4 mr-2" />
-                Pay All Dues
-              </Button>
+            <div>
+              <p className="text-xs text-muted-foreground">Admission Number</p>
+              <p className="font-semibold">{duesData.student.admissionNumber}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Class</p>
+              <p className="font-semibold">{duesData.student.className}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Section</p>
+              <p className="font-semibold">{duesData.student.section}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Dues List */}
+      {/* Pending Dues List */}
       <Card>
         <CardHeader>
-          <CardTitle>Pending Payments</CardTitle>
+          <CardTitle>Pending Installments</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {duesData.map((due) => (
-              <div 
-                key={due.id}
-                className={`border rounded-lg p-4 transition-all ${
-                  selectedDues.includes(due.id) ? 'ring-2 ring-primary border-primary' : ''
-                }`}
-                onClick={() => handleSelectDues(due.id)}
-              >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <input 
-                        type="checkbox"
-                        checked={selectedDues.includes(due.id)}
-                        onChange={() => handleSelectDues(due.id)}
-                        className="h-4 w-4"
-                      />
-                      <h3 className="font-semibold text-lg">{due.feeType}</h3>
-                      {getPriorityBadge(due.priority)}
-                      {getStatusBadge(due.status)}
-                    </div>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span>Due Date: {formatDate(due.dueDate)}</span>
+          <div className="space-y-3">
+            {duesData.dues.penalties && duesData.dues.penalties.length > 0 ? (
+              duesData.dues.penalties.map((due, index) => (
+                <div
+                  key={index}
+                  className={`border rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${getPriorityColor(due.daysOverdue, due.status)} ${
+                    selectedDues.includes(due.installmentNo) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => toggleDueSelection(due.installmentNo)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedDues.includes(due.installmentNo)}
+                          onChange={() => toggleDueSelection(due.installmentNo)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 cursor-pointer"
+                        />
+                        <h3 className="font-semibold">
+                          Installment {due.installmentNo}
+                        </h3>
+                        {getStatusBadge(due.status, due.daysOverdue)}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className={due.daysRemaining < 0 ? 'text-red-600' : ''}>
-                          {due.daysRemaining < 0 
-                            ? `${Math.abs(due.daysRemaining)} days overdue`
-                            : `${due.daysRemaining} days remaining`
-                          }
-                        </span>
+                      
+                      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mt-2">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-4 w-4" />
+                          {new Date(due.dueDate).toLocaleDateString('en-IN')}
+                        </div>
+
+                        {due.daysOverdue > 0 && (
+                          <div className="flex items-center gap-1 text-red-600">
+                            <Clock className="h-4 w-4" />
+                            {due.daysOverdue} days overdue
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="text-right">
-                    <div className="text-2xl font-bold mb-2">{formatCurrency(due.total)}</div>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Base Amount:</span>
-                        <span>{formatCurrency(due.amount)}</span>
+
+                    <div className="text-right">
+                      <div className="text-2xl font-bold mb-1">
+                        {formatCurrency(due.amount)}
                       </div>
                       {due.penalty > 0 && (
-                        <div className="flex justify-between text-red-600">
-                          <span>Late Penalty:</span>
-                          <span>+{formatCurrency(due.penalty)}</span>
+                        <div className="text-red-600 text-sm">
+                          +{formatCurrency(due.penalty)} penalty
                         </div>
                       )}
+                      <div className="text-muted-foreground text-sm font-semibold mt-1">
+                        Total: {formatCurrency(due.total)}
+                      </div>
                     </div>
                   </div>
                 </div>
-                
-                {/* Action Buttons */}
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate('/fees/pay', { state: { selectedDues: [due.id], amount: due.total } });
-                    }}
-                  >
-                    <CreditCard className="h-3 w-3 mr-1" />
-                    Pay Now
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <Download className="h-3 w-3 mr-1" />
-                    Invoice
-                  </Button>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-center text-muted-foreground py-6">No pending dues</p>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Important Information */}
-      <Card className="mt-6">
+      {/* Action Buttons */}
+      {duesData.dues.totalDue > 0 && (
+        <div className="flex gap-3">
+          <Button
+            size="lg"
+            onClick={handlePaySelected}
+            disabled={selectedDues.length === 0}
+            className="flex-1"
+          >
+            Pay Selected (
+            {selectedDues.length > 0
+              ? formatCurrency(calculateSelectedTotal())
+              : 'Select dues'}
+            )
+          </Button>
+          <Button
+            size="lg"
+            variant="default"
+            onClick={handlePayAll}
+            className="flex-1 bg-green-600 hover:bg-green-700"
+          >
+            Pay All (
+            {formatCurrency(duesData.dues.totalWithPenalty)})
+          </Button>
+        </div>
+      )}
+
+      {/* Important Notes */}
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Info className="h-5 w-5 text-blue-500" />
-            Payment Information
+            Important Information
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-medium mb-3">Late Payment Charges</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                  <span>Late fee penalty: 1% per month on overdue amount</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                  <span>Payment must be cleared before appearing for exams</span>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-medium mb-3">Need Help?</h4>
-              <div className="space-y-3">
-                <Button variant="outline" className="w-full justify-start">
-                  <Mail className="h-4 w-4 mr-2" />
-                  Email Accounts Department
-                </Button>
-                <Button variant="outline" className="w-full justify-start">
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call Support: +91 9876543210
-                </Button>
-              </div>
-            </div>
-          </div>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+              <span>Late payment incurs a penalty of 1% per month on the due amount.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+              <span>You can pay installments individually or all at once.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+              <span>Payment receipts are generated automatically after confirmation.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+              <span>Contact the accounts office for payment plan adjustments.</span>
+            </li>
+          </ul>
         </CardContent>
       </Card>
     </div>
