@@ -82,7 +82,11 @@ const TimetableManagement = () => {
           })
         ]);
 
-        const classesData = classesResponse.data.data || classesResponse.data || [];
+        const classesData = Array.isArray(classesResponse.data.data) 
+          ? classesResponse.data.data 
+          : Array.isArray(classesResponse.data) 
+            ? classesResponse.data 
+            : [];
         const latestTimetable: TimetableContext | undefined = timetablesResponse.data?.data?.[0];
 
         setClasses(classesData);
@@ -233,7 +237,7 @@ const TimetableManagement = () => {
                   <SelectValue placeholder={loadingClasses ? "Loading classes..." : "Select a class"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {classes.map(cls => (
+                  {Array.isArray(classes) && classes.map(cls => (
                     <SelectItem key={cls._id} value={cls._id}>{cls.className}</SelectItem>
                   ))}
                 </SelectContent>
