@@ -92,7 +92,8 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
           params: { academicYearId },
           headers
         });
-        setTimeSlots(timeSlotsRes.data.data || []);
+        const tsData = timeSlotsRes.data?.data || timeSlotsRes.data;
+        setTimeSlots(Array.isArray(tsData) ? tsData : []);
       } catch (timeslotErr: any) {
         console.log('No timeslots found, will use empty array');
         setTimeSlots([]);
@@ -107,17 +108,20 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
         }
       );
 
-      setTimetable(timetableRes.data.data.timetable);
-      const normalizedSlots = (timetableRes.data.data.slots || []).map((slot: TimetableSlot) => {
-        if (slot.conflictType === 'qualification_mismatch') {
-          return {
-            ...slot,
-            hasConflict: false,
-            conflictType: 'none'
-          };
-        }
-        return slot;
-      });
+      setTimetable(timetableRes.data?.data?.timetable);
+      const rawSlots = timetableRes.data?.data?.slots;
+      const normalizedSlots = Array.isArray(rawSlots)
+        ? rawSlots.map((slot: TimetableSlot) => {
+            if (slot.conflictType === 'qualification_mismatch') {
+              return {
+                ...slot,
+                hasConflict: false,
+                conflictType: 'none'
+              };
+            }
+            return slot;
+          })
+        : [];
       setSlots(normalizedSlots);
 
       // Fetch conflicts only if timetable exists
@@ -126,9 +130,12 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
           params: { academicYearId, classId },
           headers
         });
-        const filteredConflicts = (conflictsRes.data.data || []).filter(
-          (conflict: any) => conflict.conflictType !== 'qualification_mismatch'
-        );
+        const conflictsData = conflictsRes.data?.data || conflictsRes.data;
+        const filteredConflicts = Array.isArray(conflictsData)
+          ? conflictsData.filter(
+              (conflict: any) => conflict.conflictType !== 'qualification_mismatch'
+            )
+          : [];
         setConflicts(filteredConflicts);
       } catch (conflictErr: any) {
         console.log('No conflicts data');

@@ -82,14 +82,14 @@ const TimetableManagement = () => {
           })
         ]);
 
-        const classesData = Array.isArray(classesResponse.data.data) 
-          ? classesResponse.data.data 
-          : Array.isArray(classesResponse.data) 
-            ? classesResponse.data 
-            : [];
-        const latestTimetable: TimetableContext | undefined = timetablesResponse.data?.data?.[0];
+        const classesData = classesResponse.data?.data || classesResponse.data;
+        const safeClasses = Array.isArray(classesData) ? classesData : [];
+        setClasses(safeClasses);
 
-        setClasses(classesData);
+        const timetablesData = timetablesResponse.data?.data;
+        const latestTimetable: TimetableContext | undefined = Array.isArray(timetablesData) 
+          ? timetablesData[0] 
+          : undefined;
 
         // Auto-select latest timetable context so admin sees timetable immediately.
         if (latestTimetable) {
