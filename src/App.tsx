@@ -18,6 +18,7 @@ const Students = lazy(() => import('@/pages/Students'));
 const Teachers = lazy(() => import('@/pages/Teachers'));
 const Attendance = lazy(() => import('@/pages/Attendance'));
 const StudentAttendance = lazy(() => import('@/pages/StudentAttendance'));
+const ClassWiseAttendance = lazy(() => import('@/pages/ClassWiseAttendance'));
 const Exams = lazy(() => import('@/pages/exam/Exams'));
 const CreateExam = lazy(() => import('@/pages/exam/CreateExam'));
 const TakeExam = lazy(() => import('@/pages/exam/TakeExam'));
@@ -32,7 +33,6 @@ const Certificates = lazy(() => import('@/pages/Certificates'));
 const Communication = lazy(() => import('@/pages/Communication'));
 const Syllabus = lazy(() => import('@/pages/SyllabusNew'));
 const SubjectsManagement = lazy(() => import('@/pages/SubjectsManagement'));
-const TeacherAssignments = lazy(() => import('@/pages/TeacherAssignments'));
 const Transport = lazy(() => import('@/pages/Transport'));
 const TimetableManagement = lazy(() => import('@/pages/TimetableManagement'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
@@ -240,6 +240,11 @@ function App() {
                       <Attendance />
                     </RoleBasedRoute>
                   } />
+                  <Route path="/attendance/class-wise" element={
+                    <RoleBasedRoute allowedRoles={['admin', 'owner']}>
+                      <ClassWiseAttendance />
+                    </RoleBasedRoute>
+                  } />
                   <Route path="/student/attendance" element={
                     <RoleBasedRoute allowedRoles={['student']}>
                       <StudentAttendance />
@@ -391,11 +396,6 @@ function App() {
                   <Route path="/subjects" element={
                     <RoleBasedRoute allowedRoles={['admin', 'owner']}>
                       <SubjectsManagement />
-                    </RoleBasedRoute>
-                  } />
-                  <Route path="/teacher-assignments" element={
-                    <RoleBasedRoute allowedRoles={['admin', 'teacher', 'owner']}>
-                      <TeacherAssignments />
                     </RoleBasedRoute>
                   } />
                   <Route path="/transport" element={

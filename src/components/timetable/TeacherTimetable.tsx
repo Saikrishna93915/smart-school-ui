@@ -1,188 +1,110 @@
-import { useEffect, useState } from 'react';
-import axios from 'axios';
+import { useEffect, useState, useCallback } from 'react';
+import apiClient from '@/Services/apiClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Clock, AlertCircle, Download, Calendar, BookOpen, BarChart, Users, CheckCircle, TrendingUp } from 'lucide-react';
+import { Clock, AlertCircle, Download, Calendar, BookOpen, BarChart, Users, CheckCircle, TrendingUp, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatCard } from '@/components/dashboard/StatCard';
+import { toast } from 'sonner';
 import './TeacherTimetable.css';
 
 const ensureArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
 
-const STATIC_TIME_SLOTS = [
-  { _id: 'ts1', slotName: 'Period 1', startTime: '09:00', endTime: '09:45', slotType: 'period' },
-  { _id: 'ts2', slotName: 'Period 2', startTime: '09:45', endTime: '10:30', slotType: 'period' },
-  { _id: 'ts3', slotName: 'Period 3', startTime: '10:45', endTime: '11:30', slotType: 'period' },
-  { _id: 'ts4', slotName: 'Period 4', startTime: '11:30', endTime: '12:15', slotType: 'period' },
-  { _id: 'ts5', slotName: 'Period 5', startTime: '13:00', endTime: '13:45', slotType: 'period' },
-  { _id: 'ts6', slotName: 'Period 6', startTime: '13:45', endTime: '14:30', slotType: 'period' },
-  { _id: 'ts7', slotName: 'Period 7', startTime: '14:30', endTime: '15:15', slotType: 'period' },
-];
-
-const buildStaticTeacherSlots = () => [
-  {
-    _id: 'st1',
-    dayOfWeek: 1,
-    dayName: 'Monday',
-    timeSlotId: STATIC_TIME_SLOTS[0],
-    timetableId: { _id: 'tt1', classId: { className: '10' }, sectionId: 'A' },
-    subjectId: { subjectName: 'Mathematics' },
-    isLabSession: false,
-    isSplitClass: false,
-  },
-  {
-    _id: 'st2',
-    dayOfWeek: 1,
-    dayName: 'Monday',
-    timeSlotId: STATIC_TIME_SLOTS[2],
-    timetableId: { _id: 'tt2', classId: { className: '9' }, sectionId: 'B' },
-    subjectId: { subjectName: 'Mathematics' },
-    isLabSession: false,
-    isSplitClass: false,
-  },
-  {
-    _id: 'st3',
-    dayOfWeek: 2,
-    dayName: 'Tuesday',
-    timeSlotId: STATIC_TIME_SLOTS[1],
-    timetableId: { _id: 'tt3', classId: { className: '10' }, sectionId: 'A' },
-    subjectId: { subjectName: 'Algebra' },
-    isLabSession: false,
-    isSplitClass: false,
-  },
-  {
-    _id: 'st4',
-    dayOfWeek: 3,
-    dayName: 'Wednesday',
-    timeSlotId: STATIC_TIME_SLOTS[3],
-    timetableId: { _id: 'tt4', classId: { className: '8' }, sectionId: 'C' },
-    subjectId: { subjectName: 'Science Lab' },
-    isLabSession: true,
-    isSplitClass: false,
-    roomNumber: 'Lab-2',
-  },
-  {
-    _id: 'st5',
-    dayOfWeek: 4,
-    dayName: 'Thursday',
-    timeSlotId: STATIC_TIME_SLOTS[4],
-    timetableId: { _id: 'tt5', classId: { className: '10' }, sectionId: 'B' },
-    subjectId: { subjectName: 'Geometry' },
-    isLabSession: false,
-    isSplitClass: false,
-  },
-  {
-    _id: 'st6',
-    dayOfWeek: 5,
-    dayName: 'Friday',
-    timeSlotId: STATIC_TIME_SLOTS[5],
-    timetableId: { _id: 'tt6', classId: { className: '9' }, sectionId: 'A' },
-    subjectId: { subjectName: 'Arithmetic' },
-    isLabSession: false,
-    isSplitClass: false,
-  },
-  {
-    _id: 'st7',
-    dayOfWeek: 6,
-    dayName: 'Saturday',
-    timeSlotId: STATIC_TIME_SLOTS[2],
-    timetableId: { _id: 'tt7', classId: { className: '8' }, sectionId: 'A' },
-    subjectId: { subjectName: 'Revision Session' },
-    isLabSession: false,
-    isSplitClass: false,
-  },
-];
+interface TeacherSlot {
+  _id?: string;
+  dayOfWeek: number;
+  dayName?: string;
+  timeSlotId?: {
+    _id: string;
+    slotName?: string;
+    startTime?: string;
+    endTime?: string;
+    slotType?: string;
+  };
+  timetableId?: {
+    _id?: string;
+    classId?: { className?: string };
+    sectionId?: string;
+  };
+  subjectId?: { subjectName?: string };
+  teacherId?: { name?: string };
+  roomNumber?: string;
+  isLabSession?: boolean;
+  isSplitClass?: boolean;
+  splitGroup?: string;
+  alternateWeek?: string;
+}
 
 /**
- * TeacherTimetable Component - Enhanced
+ * TeacherTimetable Component - Fully Dynamic
  * Shows the current teacher's weekly schedule across all classes
  */
 const TeacherTimetable = () => {
   const { user } = useAuth();
   const userId = user?._id || user?.id;
-  const [timetable, setTimetable] = useState<any[]>([]);
+  const [slots, setSlots] = useState<TeacherSlot[]>([]);
   const [timeSlots, setTimeSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [usingFallback, setUsingFallback] = useState(false);
-  const [academicYear] = useState('2025-26');
+  const [academicYear, setAcademicYear] = useState('2025-26');
   const [activeTab, setActiveTab] = useState('schedule');
 
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const HOLIDAY_INDEX = 0;
 
-  useEffect(() => {
-    if (userId) {
-      fetchTeacherTimetable();
-      return;
-    }
+  const fetchTeacherTimetable = useCallback(async () => {
+    if (!userId) return;
 
-    // Prevent indefinite loader when auth user id is not ready.
-    setUsingFallback(true);
-    setTimeSlots(STATIC_TIME_SLOTS);
-    setTimetable(buildStaticTeacherSlots());
-    setLoading(false);
-  }, [userId, academicYear]);
-
-  const fetchTeacherTimetable = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
       // Fetch teacher's timetable
-      const timetableRes = await axios.get(
-        `/api/timetable/teacher/${userId}`,
-        { params: { academicYearId: academicYear, term: 'term1' }, headers }
+      const timetableRes = await apiClient.get(
+        `/timetable/teacher/${userId}`,
+        { params: { academicYearId: academicYear, term: 'annual' } }
       );
 
       // Fetch time slots
-      const timeSlotsRes = await axios.get('/api/timeslots', {
-        params: { academicYearId: academicYear },
-        headers
+      const timeSlotsRes = await apiClient.get('/timeslots', {
+        params: { academicYearId: academicYear }
       });
 
       const timetablePayload = timetableRes.data?.data;
-      const normalizedTimetable = Array.isArray(timetablePayload)
+      // Backend returns { slots, groupedByDay, totalPeriods } or array of slots
+      const rawSlots = Array.isArray(timetablePayload)
         ? timetablePayload
         : Array.isArray(timetablePayload?.slots)
           ? timetablePayload.slots
-          : [];
+          : Array.isArray(timetablePayload?.groupedByDay)
+            ? Object.values(timetablePayload.groupedByDay).flat()
+            : [];
 
-      const normalizedTimeSlots = ensureArray<any>(timeSlotsRes.data?.data);
-
-      if (normalizedTimetable.length === 0 || normalizedTimeSlots.length === 0) {
-        setUsingFallback(true);
-        setTimetable(buildStaticTeacherSlots());
-        setTimeSlots(STATIC_TIME_SLOTS);
-      } else {
-        setUsingFallback(false);
-        setTimetable(normalizedTimetable);
-        setTimeSlots(normalizedTimeSlots);
-      }
-
-    } catch (err) {
+      setSlots(ensureArray<TeacherSlot>(rawSlots));
+      setTimeSlots(ensureArray<any>(timeSlotsRes.data?.data));
+    } catch (err: any) {
       console.error('Error fetching teacher timetable:', err);
-      setUsingFallback(true);
-      setError(null);
-      setTimetable(buildStaticTeacherSlots());
-      setTimeSlots(STATIC_TIME_SLOTS);
+      if (err.response?.status !== 401) {
+        setError(err.response?.data?.message || 'Failed to load schedule');
+      }
+      setSlots([]);
+      setTimeSlots([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, academicYear]);
+
+  useEffect(() => {
+    fetchTeacherTimetable();
+  }, [fetchTeacherTimetable]);
 
   // Get slot for specific day and time
   const getSlotForDayTime = (dayOfWeek: number, timeSlotId: string) => {
-    if (!Array.isArray(timetable)) return null;
-    
-    return timetable.find(slot => 
-      slot.dayOfWeek === dayOfWeek && 
+    return slots.find(slot =>
+      slot.dayOfWeek === dayOfWeek &&
       slot.timeSlotId?._id === timeSlotId
     );
   };
@@ -194,16 +116,19 @@ const TeacherTimetable = () => {
 
   // Calculate statistics
   const classCount = new Set(
-    Array.isArray(timetable) ? timetable.map(slot => slot.timetableId?._id) : []
+    slots.map(slot => slot.timetableId?.classId?.className).filter(Boolean)
   ).size;
 
-  const totalPeriods = Array.isArray(timetable) ? timetable.length : 0;
-  const labSessions = Array.isArray(timetable) ? timetable.filter(s => s.isLabSession).length : 0;
+  const totalPeriods = slots.length;
+  const labSessions = slots.filter(s => s.isLabSession).length;
   const teachingDays = new Set(
-    Array.isArray(timetable)
-      ? timetable.filter(s => s.dayOfWeek !== HOLIDAY_INDEX).map(s => s.dayOfWeek)
-      : []
+    slots.filter(s => s.dayOfWeek !== HOLIDAY_INDEX).map(s => s.dayOfWeek)
   ).size;
+
+  const handleRefresh = async () => {
+    await fetchTeacherTimetable();
+    toast.success('Schedule refreshed');
+  };
 
   if (loading) {
     return (
@@ -227,7 +152,7 @@ const TeacherTimetable = () => {
           <AlertCircle className="h-12 w-12 text-destructive/50 mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">Unable to Load Schedule</h3>
           <p className="text-muted-foreground mb-4">{error}</p>
-          <Button onClick={fetchTeacherTimetable}>Try Again</Button>
+          <Button onClick={handleRefresh}>Try Again</Button>
         </CardContent>
       </Card>
     );
@@ -249,18 +174,19 @@ const TeacherTimetable = () => {
               <p className="text-muted-foreground">
                 Academic Year {academicYear} • {user?.name || 'Teacher'}
               </p>
-              {usingFallback && (
-                <p className="text-xs text-amber-600">
-                  Showing assigned static timetable preview.
-                </p>
-              )}
             </div>
           </div>
         </div>
-        <Button>
-          <Download className="h-4 w-4 mr-2" />
-          Export Schedule
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+          <Button size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Export Schedule
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -327,11 +253,21 @@ const TeacherTimetable = () => {
               <CardContent className="p-12 text-center">
                 <Calendar className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Classes Assigned</h3>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground mb-2">
                   You don't have any classes assigned for {academicYear} yet.
                 </p>
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-sm text-muted-foreground">
                   Please contact the administrator to assign classes.
+                </p>
+              </CardContent>
+            </Card>
+          ) : teachingPeriods.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Clock className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Time Slots Configured</h3>
+                <p className="text-muted-foreground">
+                  Time slots have not been set up for {academicYear}. Contact your administrator.
                 </p>
               </CardContent>
             </Card>
@@ -378,7 +314,7 @@ const TeacherTimetable = () => {
                                 {slot ? (
                                   <div className="rounded-lg bg-primary/10 border border-primary/20 p-2">
                                     <p className="text-xs font-semibold text-primary">
-                                      {slot.timetableId?.classId?.className}
+                                      {slot.timetableId?.classId?.className || 'N/A'}
                                     </p>
                                     <p className="text-xs text-muted-foreground">
                                       {slot.subjectId?.subjectName || 'Unassigned'}
@@ -412,11 +348,11 @@ const TeacherTimetable = () => {
 
         {/* Detailed View */}
         <TabsContent value="detailed" className="space-y-6">
-          {Array.isArray(timetable) && timetable.length > 0 ? (
+          {slots.length > 0 ? (
             <div className="space-y-4">
               {DAYS.map((day, dayIdx) => {
                 if (dayIdx === HOLIDAY_INDEX) return null;
-                const daySessions = timetable.filter(slot => slot.dayOfWeek === dayIdx);
+                const daySessions = slots.filter(slot => slot.dayOfWeek === dayIdx);
                 if (daySessions.length === 0) return null;
 
                 return (
@@ -457,12 +393,12 @@ const TeacherTimetable = () => {
                               </div>
                               <div className="flex flex-col gap-2 ml-4">
                                 {slot.isLabSession && (
-                                  <Badge className="bg-warning/20 text-warning border-warning/30">Lab/Practical</Badge>
+                                  <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Lab/Practical</Badge>
                                 )}
                                 {slot.isSplitClass && (
-                                  <Badge className="bg-info/20 text-info border-info/30">Group {slot.splitGroup}</Badge>
+                                  <Badge variant="outline" className="text-xs">Group {slot.splitGroup}</Badge>
                                 )}
-                                {slot.alternateWeek !== 'both' && (
+                                {slot.alternateWeek && slot.alternateWeek !== 'both' && (
                                   <Badge variant="outline" className="text-xs">
                                     {slot.alternateWeek === 'odd' ? 'Odd Weeks' : 'Even Weeks'}
                                   </Badge>
@@ -502,12 +438,12 @@ const TeacherTimetable = () => {
                     <span>Class Distribution</span>
                     <span className="font-bold">{classCount} classes</span>
                   </div>
-                  <Progress value={(classCount / 10) * 100} className="h-2" />
+                  <Progress value={Math.min((classCount / 10) * 100, 100)} className="h-2" />
                 </div>
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span>Weekly Periods</span>
-                    <span className="font-bold">{totalPeriods} hours</span>
+                    <span className="font-bold">{totalPeriods}</span>
                   </div>
                   <Progress value={Math.min((totalPeriods / 50) * 100, 100)} className="h-2" />
                 </div>
@@ -516,7 +452,7 @@ const TeacherTimetable = () => {
                     <span>Lab Sessions</span>
                     <span className="font-bold">{labSessions}</span>
                   </div>
-                  <Progress value={(labSessions / totalPeriods) * 100} className="h-2" />
+                  <Progress value={totalPeriods > 0 ? (labSessions / totalPeriods) * 100 : 0} className="h-2" />
                 </div>
               </CardContent>
             </Card>
@@ -534,17 +470,17 @@ const TeacherTimetable = () => {
                     <p className="text-sm text-muted-foreground">Total Classes</p>
                     <p className="text-2xl font-bold text-primary">{classCount}</p>
                   </div>
-                  <div className="p-3 bg-success/10 rounded">
+                  <div className="p-3 bg-green-100 rounded">
                     <p className="text-sm text-muted-foreground">Teaching Days</p>
-                    <p className="text-2xl font-bold text-success">{teachingDays}</p>
+                    <p className="text-2xl font-bold text-green-600">{teachingDays}</p>
                   </div>
-                  <div className="p-3 bg-warning/10 rounded">
+                  <div className="p-3 bg-yellow-100 rounded">
                     <p className="text-sm text-muted-foreground">Lab Sessions</p>
-                    <p className="text-2xl font-bold text-warning">{labSessions}</p>
+                    <p className="text-2xl font-bold text-yellow-600">{labSessions}</p>
                   </div>
-                  <div className="p-3 bg-info/10 rounded">
+                  <div className="p-3 bg-blue-100 rounded">
                     <p className="text-sm text-muted-foreground">Avg. Per Day</p>
-                    <p className="text-2xl font-bold text-info">{Math.ceil(totalPeriods / teachingDays)}</p>
+                    <p className="text-2xl font-bold text-blue-600">{teachingDays > 0 ? Math.ceil(totalPeriods / teachingDays) : 0}</p>
                   </div>
                 </div>
               </CardContent>
@@ -577,7 +513,7 @@ const TeacherTimetable = () => {
                 </div>
                 <div className="space-y-2">
                   <h4 className="font-semibold flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-warning" />
+                    <Clock className="h-4 w-4 text-yellow-500" />
                     Time Management
                   </h4>
                   <ul className="text-sm space-y-1">
@@ -589,7 +525,7 @@ const TeacherTimetable = () => {
                 </div>
                 <div className="space-y-2">
                   <h4 className="font-semibold flex items-center gap-2">
-                    <Users className="h-4 w-4 text-success" />
+                    <Users className="h-4 w-4 text-green-500" />
                     Communication
                   </h4>
                   <ul className="text-sm space-y-1">

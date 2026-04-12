@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useState, useEffect, useCallback } from 'react';
+import apiClient from '@/Services/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import TimetableGrid from '../components/timetable/TimetableGrid';
 import TeacherTimetable from '../components/timetable/TeacherTimetable';
@@ -38,11 +38,43 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
+import { toast } from 'sonner';
 
 const ensureArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
 
+interface ClassDoc {
+  _id: string;
+  className: string;
+  sections?: string[];
+}
+
+interface TimetableDoc {
+  _id: string;
+  classId?: string | { _id?: string; className?: string };
+  sectionId?: string;
+  academicYearId?: string;
+  term?: string;
+  isPublished?: boolean;
+  status?: string;
+  assignedPeriods?: number;
+  totalPeriods?: number;
+  hasConflicts?: boolean;
+  conflictCount?: number;
+}
+
+interface ConflictDoc {
+  _id: string;
+  timetableId?: { classId?: { className?: string }; sectionId?: string };
+  dayName?: string;
+  subjectId?: { subjectName?: string };
+  teacherId?: { name?: string };
+  conflictType?: string;
+  conflictDetails?: string;
+  severity?: string;
+}
+
 /**
- * TimetableManagement Page - Enhanced with SilverSand Design
+ * TimetableManagement Page - Fully Dynamic
  * Role-based timetable view:
  * - Admin/Owner: Manage all timetables
  * - Teacher: View own schedule
@@ -51,108 +83,148 @@ const ensureArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value :
 const TimetableManagement = () => {
   const { user } = useAuth();
   const [selectedClass, setSelectedClass] = useState('');
-  const [selectedSection, setSelectedSection] = useState('A');
-  const [academicYear, setAcademicYear] = useState('2025-26');
-  const [term, setTerm] = useState('term1');
+  const [selectedSection, setSelectedSection] = useState('');
+  const [academicYear, setAcademicYear] = useState('');
+  const [term, setTerm] = useState('annual');
   const [activeTab, setActiveTab] = useState('timetable');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch classes from API
-  const [classes, setClasses] = useState<Array<{ _id: string; className: string }>>([]);
+  // Dynamic data from API
+  const [classes, setClasses] = useState<ClassDoc[]>([]);
+  const [timetables, setTimetables] = useState<TimetableDoc[]>([]);
+  const [conflicts, setConflicts] = useState<ConflictDoc[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  interface TimetableContext {
-    classId?: string | { _id?: string };
-    sectionId?: string;
-    academicYearId?: string;
-    term?: string;
-  }
+  // Stats
+  const [stats, setStats] = useState({
+    totalClasses: 0,
+    completedTimetables: 0,
+    conflictingSlots: 0,
+    totalSlots: 0,
+    filledSlots: 0,
+    publishedTimetables: 0,
+  });
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        setApiError(null);
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const fetchInitialData = useCallback(async () => {
+    try {
+      setApiError(null);
+      setLoadingClasses(true);
 
-        const [classesResponse, timetablesResponse] = await Promise.all([
-          axios.get('/api/timetable/classes', { headers }),
-          axios.get('/api/timetable', {
-            params: { page: 1, limit: 1 },
-            headers
-          })
-        ]);
+      const [classesResponse, timetablesResponse] = await Promise.all([
+        apiClient.get('/timetable/classes'),
+        apiClient.get('/timetable', {
+          params: { page: 1, limit: 100 }
+        })
+      ]);
 
-        const classesData = classesResponse.data?.data || classesResponse.data;
-        const safeClasses = ensureArray<{ _id: string; className: string }>(classesData);
-        setClasses(safeClasses);
+      const classesData = classesResponse.data?.data || classesResponse.data;
+      const safeClasses = ensureArray<ClassDoc>(classesData);
+      setClasses(safeClasses);
 
-        const timetablesData = timetablesResponse.data?.data;
-        const latestTimetable: TimetableContext | undefined = Array.isArray(timetablesData) 
-          ? timetablesData[0] 
-          : undefined;
+      const timetablesData = timetablesResponse.data?.data;
+      const safeTimetables = ensureArray<TimetableDoc>(timetablesData);
+      setTimetables(safeTimetables);
 
-        // Auto-select latest timetable context so admin sees timetable immediately.
-        if (latestTimetable) {
-          const resolvedClassId =
-            typeof latestTimetable.classId === 'string'
-              ? latestTimetable.classId
-              : latestTimetable.classId?._id || '';
+      // Compute stats dynamically
+      const publishedCount = safeTimetables.filter(t => t.isPublished).length;
+      const completedCount = safeTimetables.filter(t => t.status === 'published' || t.isPublished).length;
+      const totalSlots = safeTimetables.reduce((sum, t) => sum + (t.totalPeriods || 0), 0);
+      const filledSlots = safeTimetables.reduce((sum, t) => sum + (t.assignedPeriods || 0), 0);
+      const conflictCount = safeTimetables.filter(t => t.hasConflicts).length;
 
-          if (resolvedClassId) {
-            setSelectedClass(resolvedClassId);
-          }
-          if (latestTimetable.sectionId) {
-            setSelectedSection(latestTimetable.sectionId);
-          }
-          if (latestTimetable.academicYearId) {
-            setAcademicYear(latestTimetable.academicYearId);
-          }
-          if (latestTimetable.term) {
-            setTerm(latestTimetable.term);
-          }
-          return;
+      setStats({
+        totalClasses: safeClasses.length,
+        completedTimetables: completedCount,
+        conflictingSlots: conflictCount,
+        totalSlots,
+        filledSlots,
+        publishedTimetables: publishedCount,
+      });
+
+      // Auto-select latest timetable context
+      if (safeTimetables.length > 0) {
+        const latest = safeTimetables[0];
+        const resolvedClassId =
+          typeof latest.classId === 'string'
+            ? latest.classId
+            : latest.classId?._id || '';
+
+        if (resolvedClassId) setSelectedClass(resolvedClassId);
+        if (latest.sectionId) setSelectedSection(latest.sectionId);
+        if (latest.academicYearId) setAcademicYear(latest.academicYearId);
+        if (latest.term) setTerm(latest.term);
+      } else if (safeClasses.length > 0) {
+        // Fallback to first class
+        setSelectedClass(safeClasses[0]._id);
+        if (safeClasses[0].sections?.[0]) {
+          setSelectedSection(safeClasses[0].sections[0]);
         }
-
-        // Fallback to first class to avoid empty "Select a Class" state on first load.
-        if (safeClasses.length > 0) {
-          setSelectedClass(safeClasses[0]._id);
-        }
-      } catch (error: any) {
-        console.error('Error fetching timetable setup data:', error);
-        setApiError(error.response?.data?.message || error.message || 'Failed to load timetable data. Please check your connection.');
-      } finally {
-        setLoadingClasses(false);
       }
-    };
-
-    fetchInitialData();
+    } catch (error: any) {
+      console.error('Error fetching timetable setup data:', error);
+      if (error.response?.status === 401) return;
+      setApiError(error.response?.data?.message || error.message || 'Failed to load timetable data. Please check your connection.');
+    } finally {
+      setLoadingClasses(false);
+    }
   }, []);
 
-  const sections = ['A', 'B', 'C', 'D'];
-  const academicYears = ['2024-25', '2025-26', '2026-27'];
-  const terms = [
-    { value: 'term1', label: 'Term 1' },
-    { value: 'term2', label: 'Term 2' },
-    { value: 'annual', label: 'Annual' }
-  ];
+  // Fetch conflicts for the Conflicts tab
+  const fetchConflicts = useCallback(async () => {
+    try {
+      const params: Record<string, string> = {};
+      if (academicYear) params.academicYearId = academicYear;
 
-  // Mock timetable stats
-  const stats = {
-    totalClasses: classes.length,
-    completedTimetables: 8,
-    conflictingSlots: 2,
-    totalSlots: 45,
-    filledSlots: 38,
-    publishedTimetables: 6,
-  };
+      const res = await apiClient.get('/timetable/conflicts', { params });
+      const conflictsData = res.data?.data || res.data;
+      setConflicts(ensureArray<ConflictDoc>(conflictsData));
 
-  const timetableCompletionPercentage = Math.round((stats.filledSlots / stats.totalSlots) * 100);
+      setStats(prev => ({
+        ...prev,
+        conflictingSlots: ensureArray<ConflictDoc>(conflictsData).length
+      }));
+    } catch (err) {
+      console.error('Error fetching conflicts:', err);
+      setConflicts([]);
+    }
+  }, [academicYear]);
+
+  // Extract unique academic years from timetables
+  const academicYears = [...new Set(
+    timetables
+      .map(t => t.academicYearId)
+      .filter(Boolean) as string[]
+  )].sort().reverse();
+
+  // Extract available terms
+  const termsMap: Record<string, string> = { annual: 'Annual', term1: 'Term 1', term2: 'Term 2' };
+  const availableTerms = [...new Set(
+    timetables
+      .map(t => t.term)
+      .filter(Boolean) as string[]
+  )];
+  const terms = availableTerms.length > 0
+    ? availableTerms.map(t => ({ value: t, label: termsMap[t] || t }))
+    : Object.entries(termsMap).map(([value, label]) => ({ value, label }));
+
+  // Get sections for the selected class
+  const selectedClassDoc = classes.find(c => c._id === selectedClass);
+  const sections = selectedClassDoc?.sections || ['A', 'B', 'C', 'D'];
+
+  // Recompute stats when timetables change
+  const timetableCompletionPercentage = stats.totalSlots > 0
+    ? Math.round((stats.filledSlots / stats.totalSlots) * 100)
+    : 0;
 
   // Permission checks
   const canPublish = ['admin', 'owner'].includes(user?.role || '');
   const canViewAnalytics = ['admin', 'owner', 'principal'].includes(user?.role || '');
+
+  const handleRefresh = async () => {
+    await fetchInitialData();
+    toast.success('Timetable data refreshed');
+  };
 
   // Render Admin/Owner View
   const renderAdminView = () => (
@@ -173,8 +245,8 @@ const TimetableManagement = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
-            <RefreshCw className="h-4 w-4 mr-2" />
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loadingClasses}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loadingClasses ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button variant="outline" size="sm">
@@ -200,7 +272,7 @@ const TimetableManagement = () => {
                 <p className="font-medium text-destructive">Failed to Load Data</p>
                 <p className="text-sm text-muted-foreground mt-1">{apiError}</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+              <Button variant="outline" size="sm" onClick={handleRefresh}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Retry
               </Button>
@@ -221,12 +293,16 @@ const TimetableManagement = () => {
               </Label>
               <Select value={academicYear} onValueChange={setAcademicYear}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select year" />
                 </SelectTrigger>
                 <SelectContent>
-                  {academicYears.map(year => (
-                    <SelectItem key={year} value={year}>{year}</SelectItem>
-                  ))}
+                  {academicYears.length > 0 ? (
+                    academicYears.map(year => (
+                      <SelectItem key={year} value={year}>{year}</SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="2025-26">2025-26</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -234,12 +310,16 @@ const TimetableManagement = () => {
             {/* Class */}
             <div className="lg:col-span-3 space-y-2">
               <Label className="text-sm font-medium">Class</Label>
-              <Select value={selectedClass} onValueChange={setSelectedClass} disabled={loadingClasses}>
+              <Select value={selectedClass} onValueChange={(val) => {
+                setSelectedClass(val);
+                const cls = classes.find(c => c._id === val);
+                if (cls?.sections?.[0]) setSelectedSection(cls.sections[0]);
+              }} disabled={loadingClasses}>
                 <SelectTrigger>
                   <SelectValue placeholder={loadingClasses ? "Loading classes..." : "Select a class"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {Array.isArray(classes) && classes.map(cls => (
+                  {classes.map(cls => (
                     <SelectItem key={cls._id} value={cls._id}>{cls.className}</SelectItem>
                   ))}
                 </SelectContent>
@@ -251,7 +331,7 @@ const TimetableManagement = () => {
               <Label className="text-sm font-medium">Section</Label>
               <Select value={selectedSection} onValueChange={setSelectedSection}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select section" />
                 </SelectTrigger>
                 <SelectContent>
                   {sections.map(sec => (
@@ -280,8 +360,8 @@ const TimetableManagement = () => {
             <div className="lg:col-span-3 space-y-2">
               <Label className="text-sm font-medium">Search</Label>
               <div className="relative">
-                <Input 
-                  placeholder="Search classes..." 
+                <Input
+                  placeholder="Search classes..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9"
@@ -306,7 +386,7 @@ const TimetableManagement = () => {
         <StatCard
           title="Timetables"
           value={`${stats.completedTimetables}/${stats.totalClasses}`}
-          subtitle={`${Math.round((stats.completedTimetables/stats.totalClasses)*100)}% completed`}
+          subtitle={stats.totalClasses > 0 ? `${Math.round((stats.completedTimetables/stats.totalClasses)*100)}% completed` : 'No timetables yet'}
           icon={Target}
           variant="success"
           trend={{ value: 15, isPositive: true }}
@@ -339,6 +419,11 @@ const TimetableManagement = () => {
           <TabsTrigger value="conflicts" className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
             Conflicts
+            {stats.conflictingSlots > 0 && (
+              <Badge variant="destructive" className="ml-1 h-5 min-w-5 flex items-center justify-center text-xs">
+                {stats.conflictingSlots}
+              </Badge>
+            )}
           </TabsTrigger>
           {canViewAnalytics && (
             <TabsTrigger value="analytics" className="flex items-center gap-2">
@@ -357,6 +442,7 @@ const TimetableManagement = () => {
           <div>
             {selectedClass && selectedSection ? (
               <TimetableGrid
+                key={`${selectedClass}-${selectedSection}-${academicYear}-${term}`}
                 classId={selectedClass}
                 sectionId={selectedSection}
                 academicYearId={academicYear}
@@ -376,7 +462,7 @@ const TimetableManagement = () => {
           </div>
         </TabsContent>
 
-        {/* Conflicts Tab */}
+        {/* Conflicts Tab - Dynamic */}
         <TabsContent value="conflicts" className="space-y-6">
           <Card>
             <CardHeader>
@@ -385,31 +471,42 @@ const TimetableManagement = () => {
                 Schedule Conflicts
               </CardTitle>
               <CardDescription>Review and resolve scheduling conflicts</CardDescription>
+              <Button variant="outline" size="sm" onClick={fetchConflicts} className="w-fit mt-2">
+                <RefreshCw className="h-3 w-3 mr-2" />
+                Refresh Conflicts
+              </Button>
             </CardHeader>
             <CardContent>
-              {stats.conflictingSlots > 0 ? (
+              {conflicts.length > 0 ? (
                 <div className="space-y-4">
-                  {[
-                    { class: '9th - A', subject: 'Mathematics', issue: 'Teacher overlap on Monday 10:00', severity: 'high' },
-                    { class: '10th - B', subject: 'Physics Lab', issue: 'Room unavailable Wednesday', severity: 'medium' },
-                  ].map((conflict, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30">
-                      <div>
-                        <p className="font-medium">{conflict.class} - {conflict.subject}</p>
-                        <p className="text-sm text-muted-foreground">{conflict.issue}</p>
+                  {conflicts.map((conflict) => {
+                    const className = conflict.timetableId?.classId?.className || 'Unknown Class';
+                    const section = conflict.timetableId?.sectionId || '';
+                    const subject = conflict.subjectId?.subjectName || 'Unknown Subject';
+                    const teacher = conflict.teacherId?.name || 'Unknown Teacher';
+                    const details = conflict.conflictDetails || conflict.conflictType || 'No details';
+
+                    return (
+                      <div key={conflict._id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30">
+                        <div>
+                          <p className="font-medium">{className}{section ? ` - ${section}` : ''} — {subject}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {conflict.dayName && `${conflict.dayName} · `}{teacher} — {details}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={conflict.conflictType === 'teacher_clash' ? 'destructive' : 'warning'}>
+                            {(conflict.conflictType || 'conflict').replace(/_/g, ' ')}
+                          </Badge>
+                          <Button size="sm" variant="outline">Resolve</Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={conflict.severity === 'high' ? 'destructive' : 'warning'}>
-                          {conflict.severity.charAt(0).toUpperCase() + conflict.severity.slice(1)}
-                        </Badge>
-                        <Button size="sm" variant="outline">Resolve</Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <CheckCircle className="h-12 w-12 text-success mx-auto mb-3" />
+                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
                   <p className="text-muted-foreground">No scheduling conflicts detected</p>
                 </div>
               )}
@@ -417,7 +514,7 @@ const TimetableManagement = () => {
           </Card>
         </TabsContent>
 
-        {/* Analytics Tab */}
+        {/* Analytics Tab - Dynamic */}
         {canViewAnalytics && (
           <TabsContent value="analytics" className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
@@ -446,6 +543,18 @@ const TimetableManagement = () => {
                       <p className="text-2xl font-bold">{stats.publishedTimetables}</p>
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Conflicts</p>
+                      <p className="text-2xl font-bold text-{stats.conflictingSlots > 0 ? 'destructive' : 'green-600'}">
+                        {stats.conflictingSlots}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Timetables</p>
+                      <p className="text-2xl font-bold">{timetables.length}</p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -455,28 +564,33 @@ const TimetableManagement = () => {
                     <Users className="h-5 w-5" />
                     Resource Utilization
                   </CardTitle>
+                  <CardDescription>Based on current timetable assignments</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Teacher Hours</span>
-                      <span className="font-bold">85%</span>
+                      <span>Slot Fill Rate</span>
+                      <span className="font-bold">{timetableCompletionPercentage}%</span>
                     </div>
-                    <Progress value={85} className="h-2" />
+                    <Progress value={timetableCompletionPercentage} className="h-2" />
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Room Utilization</span>
-                      <span className="font-bold">72%</span>
+                      <span>Classes with Timetables</span>
+                      <span className="font-bold">
+                        {stats.totalClasses > 0 ? Math.round((stats.completedTimetables / stats.totalClasses) * 100) : 0}%
+                      </span>
                     </div>
-                    <Progress value={72} className="h-2" />
+                    <Progress value={stats.totalClasses > 0 ? (stats.completedTimetables / stats.totalClasses) * 100 : 0} className="h-2" />
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Lab Time</span>
-                      <span className="font-bold">60%</span>
+                      <span>Published Rate</span>
+                      <span className="font-bold">
+                        {timetables.length > 0 ? Math.round((stats.publishedTimetables / timetables.length) * 100) : 0}%
+                      </span>
                     </div>
-                    <Progress value={60} className="h-2" />
+                    <Progress value={timetables.length > 0 ? (stats.publishedTimetables / timetables.length) * 100 : 0} className="h-2" />
                   </div>
                 </CardContent>
               </Card>
@@ -534,7 +648,7 @@ const TimetableManagement = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <h4 className="font-semibold flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-success" />
+                <CheckCircle className="h-4 w-4 text-green-500" />
                 Best Practices
               </h4>
               <ul className="text-sm space-y-1">
@@ -546,7 +660,7 @@ const TimetableManagement = () => {
             </div>
             <div className="space-y-2">
               <h4 className="font-semibold flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-warning" />
+                <AlertCircle className="h-4 w-4 text-yellow-500" />
                 Common Issues
               </h4>
               <ul className="text-sm space-y-1">
@@ -574,7 +688,6 @@ const TimetableManagement = () => {
     </div>
   );
 
-  // Determine which view to render based on user role
   const userRole = user?.role;
 
   return (

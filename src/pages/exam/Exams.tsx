@@ -1,6 +1,6 @@
 // src/pages/exam/Exams.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
@@ -39,7 +39,7 @@ import ExamCard from '@/components/dashboard/Exams/ExamCard';
 // Hooks & Services
 import { useAuth } from '@/contexts/AuthContext';
 import { useExam } from '@/hooks/useExam';
-import { examService } from '@/Services/exam.service';
+import examService from '@/Services/exam.service';
 import { toast } from 'sonner';
 import { formatDuration, formatExamDate, formatTime } from '@/lib/utils/examUtils';
 
@@ -90,51 +90,25 @@ const ExamsPage: React.FC = () => {
 
   const isStudent = user?.role === 'student';
 
-  const updateStats = useCallback((examsList: ExamWithSubmission[]) => {
-    const total = examsList.length;
-    const scheduled = examsList.filter(e => {
-      const status = (e.calculatedStatus || e.status)?.toLowerCase();
-      return status === 'scheduled';
-    }).length;
-    const ongoing = examsList.filter(e => {
-      const status = (e.calculatedStatus || e.status)?.toLowerCase();
-      return status === 'ongoing' || status === 'live';
-    }).length;
-    const completed = examsList.filter(e => {
-      const status = (e.calculatedStatus || e.status)?.toLowerCase();
-      return status === 'completed';
-    }).length;
-    const draft = examsList.filter(e => {
-      const status = (e.calculatedStatus || e.status)?.toLowerCase();
-      return status === 'draft';
-    }).length;
+  // Compute filtered exams and stats using useMemo instead of useEffect to prevent infinite loops
+  const { filteredExams: computedFilteredExams, stats: computedStats, uniqueClasses: computedUniqueClasses } = useMemo(() => {
+    const typedExams = Array.isArray(exams) ? exams as ExamWithSubmission[] : [];
 
-    setStats({ total, scheduled, ongoing, completed, draft });
-  }, []);
-
-  const updateUniqueClasses = useCallback((classes: string[]) => {
-    setUniqueClasses(classes);
-  }, []);
-
-  const applyFilters = useCallback(() => {
-    if (!Array.isArray(exams) || exams.length === 0) {
-      setFilteredExams([]);
-      updateStats([]);
-      updateUniqueClasses([]);
-      return;
+    if (typedExams.length === 0) {
+      return {
+        filteredExams: [],
+        stats: { total: 0, scheduled: 0, ongoing: 0, completed: 0, draft: 0 },
+        uniqueClasses: []
+      };
     }
 
-    // Cast exams to ExamWithSubmission type
-    const typedExams = exams as ExamWithSubmission[];
     let filtered = [...typedExams];
 
-    // Filter by tab status (use calculatedStatus if available)
+    // Filter by tab status
     if (activeTab !== 'all') {
       filtered = filtered.filter(exam => {
         const examStatus = (exam?.calculatedStatus || exam?.status)?.toLowerCase();
         const activeTabLower = activeTab.toLowerCase();
-        
-        // Handle status mappings
         if (activeTabLower === 'ongoing' || activeTabLower === 'live') {
           return examStatus === 'ongoing' || examStatus === 'live';
         }
@@ -145,7 +119,7 @@ const ExamsPage: React.FC = () => {
     // Filter by search term
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter(exam => 
+      filtered = filtered.filter(exam =>
         exam?.name?.toLowerCase().includes(term) ||
         exam?.description?.toLowerCase().includes(term) ||
         exam?.subject?.toLowerCase().includes(term) ||
@@ -159,11 +133,15 @@ const ExamsPage: React.FC = () => {
       filtered = filtered.filter(exam => exam?.className === classFilter);
     }
 
-    setFilteredExams(filtered);
-    updateStats(filtered);
-    
-    // Extract unique classes from all exams (not just filtered)
-    const classes = Array.from(
+    // Compute stats
+    const total = filtered.length;
+    const scheduled = filtered.filter(e => (e.calculatedStatus || e.status)?.toLowerCase() === 'scheduled').length;
+    const ongoing = filtered.filter(e => ['ongoing', 'live'].includes((e.calculatedStatus || e.status)?.toLowerCase())).length;
+    const completed = filtered.filter(e => (e.calculatedStatus || e.status)?.toLowerCase() === 'completed').length;
+    const draft = filtered.filter(e => (e.calculatedStatus || e.status)?.toLowerCase() === 'draft').length;
+
+    // Extract unique classes
+    const uniqueClasses = Array.from(
       new Set(
         typedExams
           .filter(exam => exam?.className)
@@ -172,8 +150,16 @@ const ExamsPage: React.FC = () => {
           .sort()
       )
     );
-    updateUniqueClasses(classes);
-  }, [exams, activeTab, searchTerm, classFilter, updateStats, updateUniqueClasses]);
+
+    return { filteredExams: filtered, stats: { total, scheduled, ongoing, completed, draft }, uniqueClasses };
+  }, [exams, activeTab, searchTerm, classFilter]);
+
+  // Sync computed values to state for compatibility with rest of component
+  useEffect(() => {
+    setFilteredExams(computedFilteredExams);
+    setStats(computedStats);
+    setUniqueClasses(computedUniqueClasses);
+  }, [computedFilteredExams, computedStats, computedUniqueClasses]);
 
   const loadInitialExams = useCallback(async () => {
     try {
@@ -217,11 +203,6 @@ const ExamsPage: React.FC = () => {
   useEffect(() => {
     loadInitialExams();
   }, []);
-
-  // Apply filters whenever exams, activeTab, searchTerm, or classFilter changes
-  useEffect(() => {
-    applyFilters();
-  }, [exams, activeTab, searchTerm, classFilter]);
 
   const handleRefresh = async () => {
     try {

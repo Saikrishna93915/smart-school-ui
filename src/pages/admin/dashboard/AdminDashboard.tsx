@@ -6,7 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import ExamStructure from '../exams/ExamStructure';
-import SubjectTeacherAssignment from '../exams/SubjectTeacherAssignment';
 import AllReports from '../reports/AllReports';
 
 const weakStudents = [
@@ -76,7 +75,6 @@ const AdminDashboard: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="exams"><ExamStructure /></TabsContent>
-        <TabsContent value="teachers"><SubjectTeacherAssignment /></TabsContent>
         <TabsContent value="reports"><AllReports /></TabsContent>
       </Tabs>
     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import axios from 'axios';
+import apiClient from '@/Services/apiClient';
 import { AlertCircle, Clock, MapPin, User, Calendar } from 'lucide-react';
 import SlotAssignmentModal from '@/components/timetable/SlotAssignmentModal';
 import jsPDF from 'jspdf';
@@ -85,14 +85,10 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
       // Fetch time slots first
       try {
-        const timeSlotsRes = await axios.get('/api/timeslots', {
-          params: { academicYearId },
-          headers
+        const timeSlotsRes = await apiClient.get('/timeslots', {
+          params: { academicYearId }
         });
         const tsData = timeSlotsRes.data?.data || timeSlotsRes.data;
         setTimeSlots(ensureArray<TimeSlot>(tsData));
@@ -102,11 +98,10 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
       }
 
       // Fetch timetable and slots
-      const timetableRes = await axios.get(
-        `/api/timetable/${classId}/${sectionId}`,
+      const timetableRes = await apiClient.get(
+        `/timetable/${classId}/${sectionId}`,
         {
-          params: { academicYearId, term },
-          headers
+          params: { academicYearId, term }
         }
       );
 
@@ -126,9 +121,8 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
 
       // Fetch conflicts only if timetable exists
       try {
-        const conflictsRes = await axios.get('/api/timetable/conflicts', {
-          params: { academicYearId, classId },
-          headers
+        const conflictsRes = await apiClient.get('/timetable/conflicts', {
+          params: { academicYearId, classId }
         });
         const conflictsData = conflictsRes.data?.data || conflictsRes.data;
         const filteredConflicts = ensureArray<any>(conflictsData).filter(
@@ -175,18 +169,15 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
       setCreating(true);
       setError(null);
 
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
       // Create new timetable
-      await axios.post('/api/timetable', {
+      await apiClient.post('/timetable', {
         classId,
         sectionId,
         academicYearId,
         term,
         effectiveFrom: new Date().toISOString(),
         status: 'draft'
-      }, { headers });
+      });
 
       // Refresh to load the new timetable
       await fetchTimetableData();
@@ -206,10 +197,7 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
       setPublishing(true);
       setError(null);
 
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-      await axios.post(`/api/timetable/${timetable._id}/publish`, {}, { headers });
+      await apiClient.post(`/timetable/${timetable._id}/publish`, {});
       await fetchTimetableData();
       toast.success('Timetable published successfully');
     } catch (err: any) {
@@ -355,9 +343,6 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
     ignoreConflicts?: boolean;
   }) => {
     try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
       // Add dayName to the request (required by backend)
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const payload = {
@@ -366,10 +351,9 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
         ignoreConflicts: slotData.ignoreConflicts || false
       };
 
-      await axios.post(
-        `/api/timetable/${timetable?._id}/slots`,
-        payload,
-        { headers }
+      await apiClient.post(
+        `/timetable/${timetable?._id}/slots`,
+        payload
       );
 
       // Refresh timetable data
@@ -378,7 +362,7 @@ const TimetableGrid = ({ classId, sectionId, academicYearId = '2025-26', term = 
 
     } catch (err: any) {
       console.error('Error assigning slot:', err);
-      
+
       // Handle 409 Conflict errors
       if (err.response?.status === 409) {
         const conflicts = ensureArray<any>(err.response?.data?.conflicts);

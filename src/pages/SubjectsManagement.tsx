@@ -26,9 +26,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Plus, BookOpen, Edit, Trash2, RefreshCw, GraduationCap, CheckCircle, AlertCircle, Users } from 'lucide-react';
+import { Loader2, Plus, BookOpen, Edit, Trash2, RefreshCw, GraduationCap } from 'lucide-react';
 import { SubjectService, Subject } from '../Services/subject.service';
-import { TeacherAssignmentService, TeacherAssignment } from '../Services/teacherAssignment.service';
 import { toast } from 'sonner';
 
 // Constants
@@ -36,20 +35,18 @@ const CLASSES = ['LKG', 'UKG', '1st Class', '2nd Class', '3rd Class', '4th Class
 const CATEGORIES = ['Core', 'Optional', 'Language', 'Activity', 'Lab'];
 const ACADEMIC_YEAR = '2025-2026';
 
-interface SubjectWithAssignment extends Subject {
-  assignmentCount?: number;
+interface SubjectWithInfo extends Subject {
+  teacherCount?: number;
   teachers?: Array<{ name: string; email: string }>;
 }
 
 export default function SubjectsPage() {
-  const [subjects, setSubjects] = useState<SubjectWithAssignment[]>([]);
-  const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
+  const [subjects, setSubjects] = useState<SubjectWithInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [selectedClass, setSelectedClass] = useState<string>('all');
-  const [assignmentFilter, setAssignmentFilter] = useState<string>('all'); // all, assigned, unassigned
 
   // Form state
   const [formData, setFormData] = useState<{
@@ -83,29 +80,8 @@ export default function SubjectsPage() {
   const fetchSubjects = async () => {
     setIsLoading(true);
     try {
-      const [subjectsData, assignmentsData] = await Promise.all([
-        SubjectService.getAll(),
-        TeacherAssignmentService.getAll()
-      ]);
-      
-      setAssignments(assignmentsData);
-      
-      // Enrich subjects with assignment data
-      const enrichedSubjects = subjectsData.map(subject => ({
-        ...subject,
-        assignmentCount: assignmentsData.filter(a => 
-          a.subjectId._id === subject._id && 
-          a.className === subject.className
-        ).length,
-        teachers: assignmentsData
-          .filter(a => a.subjectId._id === subject._id && a.className === subject.className)
-          .map(a => ({
-            name: `${a.teacherId?.personal?.firstName || ''} ${a.teacherId?.personal?.lastName || ''}`.trim() || 'Unknown Teacher',
-            email: a.teacherId?.contact?.email || ''
-          }))
-      }));
-      
-      setSubjects(enrichedSubjects);
+      const subjectsData = await SubjectService.getAll();
+      setSubjects(subjectsData);
     } catch (error: any) {
       toast.error(error.message || 'Failed to load subjects');
     } finally {
@@ -222,7 +198,7 @@ export default function SubjectsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Subjects</CardTitle>
@@ -231,32 +207,6 @@ export default function SubjectsPage() {
           <CardContent>
             <div className="text-2xl font-bold">{subjects.length}</div>
             <p className="text-xs text-muted-foreground mt-1">All classes</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-800 dark:text-green-200">Assigned Subjects</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {subjects.filter(s => (s.assignmentCount || 0) > 0).length}
-            </div>
-            <p className="text-xs text-green-700 dark:text-green-300 mt-1">Have teachers</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-800 dark:text-orange-200">Unassigned Subjects</CardTitle>
-            <AlertCircle className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">
-              {subjects.filter(s => (s.assignmentCount || 0) === 0).length}
-            </div>
-            <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">Need teachers</p>
           </CardContent>
         </Card>
 
@@ -269,17 +219,6 @@ export default function SubjectsPage() {
             <div className="text-2xl font-bold">
               {subjects.filter((s) => s.category === 'Core').length}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Assignments</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{assignments.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Teachers assigned</p>
           </CardContent>
         </Card>
       </div>
@@ -315,32 +254,6 @@ export default function SubjectsPage() {
                       Add for {cls}
                     </Button>
                   </div>
-                  {/* Assignment Status Filters */}
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant={assignmentFilter === 'all' ? 'default' : 'outline'}
-                      onClick={() => setAssignmentFilter('all')}
-                    >
-                      All ({getSubjectsByClass(cls).length})
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={assignmentFilter === 'assigned' ? 'default' : 'outline'}
-                      onClick={() => setAssignmentFilter('assigned')}
-                      className={assignmentFilter === 'assigned' ? 'bg-green-600 hover:bg-green-700' : 'border-green-600 text-green-600 hover:bg-green-50'}
-                    >
-                      Assigned ({getSubjectsByClass(cls).filter((s) => (s.assignmentCount || 0) > 0).length})
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={assignmentFilter === 'unassigned' ? 'default' : 'outline'}
-                      onClick={() => setAssignmentFilter('unassigned')}
-                      className={assignmentFilter === 'unassigned' ? 'bg-orange-600 hover:bg-orange-700' : 'border-orange-600 text-orange-600 hover:bg-orange-50'}
-                    >
-                      Unassigned ({getSubjectsByClass(cls).filter((s) => (s.assignmentCount || 0) === 0).length})
-                    </Button>
-                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -364,99 +277,47 @@ export default function SubjectsPage() {
                           <TableHead>Subject Name</TableHead>
                           <TableHead>Code</TableHead>
                           <TableHead>Category</TableHead>
-                          <TableHead>Teachers Assigned</TableHead>
-                          <TableHead>Status</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {getSubjectsByClass(cls)
-                          .filter((subject) => {
-                            if (assignmentFilter === 'assigned') {
-                              return (subject.assignmentCount || 0) > 0;
-                            }
-                            if (assignmentFilter === 'unassigned') {
-                              return (subject.assignmentCount || 0) === 0;
-                            }
-                            return true;
-                          })
-                          .map((subject) => (
-                            <TableRow key={subject._id}>
-                              <TableCell className="font-medium">
-                                {subject.subjectName}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline">{subject.subjectCode}</Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant={
-                                    subject.category === 'Core'
-                                      ? 'default'
-                                      : 'secondary'
-                                  }
+                        {getSubjectsByClass(cls).map((subject) => (
+                          <TableRow key={subject._id}>
+                            <TableCell className="font-medium">
+                              {subject.subjectName}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{subject.subjectCode}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  subject.category === 'Core'
+                                    ? 'default'
+                                    : 'secondary'
+                                }
+                              >
+                                {subject.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleOpenDialog(subject)}
                                 >
-                                  {subject.category}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {subject.teachers && subject.teachers.length > 0 ? (
-                                  <div className="space-y-1">
-                                    {subject.teachers.slice(0, 2).map((teacher) => (
-                                      <div
-                                        key={teacher.email}
-                                        className="text-sm text-muted-foreground"
-                                      >
-                                        {teacher.name}
-                                      </div>
-                                    ))}
-                                    {subject.teachers.length > 2 && (
-                                      <div className="text-xs text-muted-foreground font-medium">
-                                        +{subject.teachers.length - 2} more
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">
-                                    No teachers assigned
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {(subject.assignmentCount || 0) > 0 ? (
-                                  <div className="flex items-center gap-2">
-                                    <CheckCircle className="h-4 w-4 text-green-600" />
-                                    <span className="text-xs font-medium text-green-600">
-                                      Assigned
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <AlertCircle className="h-4 w-4 text-orange-600" />
-                                    <span className="text-xs font-medium text-orange-600">
-                                      Unassigned
-                                    </span>
-                                  </div>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleOpenDialog(subject)}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDelete(subject._id)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </div>
-                              </TableCell>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(subject._id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
                             </TableRow>
                           ))}
                       </TableBody>

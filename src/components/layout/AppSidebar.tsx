@@ -30,7 +30,6 @@ import {
   UserCog,
   User as UserIcon,
   BookOpenCheck,
-  UserCircle,
   Clock
 } from "lucide-react";
 import {
@@ -82,11 +81,17 @@ const navItems: NavItem[] = [
     href: "/teachers", 
     roles: ["admin", "owner"] 
   },
-  { 
-    title: "Attendance", 
-    icon: UserCheck, 
-    href: "/attendance", 
-    roles: ["admin", "teacher", "parent", "student", "owner"] 
+  {
+    title: "Attendance",
+    icon: UserCheck,
+    href: "/attendance",
+    roles: ["admin", "teacher", "parent", "student", "owner"]
+  },
+  {
+    title: "Class-Wise Attendance",
+    icon: BarChart3,
+    href: "/attendance/class-wise",
+    roles: ["admin", "owner"]
   },
   { 
     title: "Exams & Results", 
@@ -242,19 +247,13 @@ const navItems: NavItem[] = [
     title: "Subjects", 
     icon: BookOpenCheck, 
     href: "/subjects", 
-    roles: ["admin", "owner"] 
+    roles: ["admin", "owner"]
   },
-  { 
-    title: "Teacher Assignments", 
-    icon: UserCircle, 
-    href: "/teacher-assignments", 
-    roles: ["admin", "teacher", "owner"] 
-  },
-  { 
-    title: "Timetable", 
-    icon: Clock, 
-    href: "/timetable", 
-    roles: ["admin", "teacher", "student", "owner"] 
+  {
+    title: "Timetable",
+    icon: Clock,
+    href: "/timetable",
+    roles: ["admin", "teacher", "student", "owner"]
   },
   { 
     title: "Communication", 
