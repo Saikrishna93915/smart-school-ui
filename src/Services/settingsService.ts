@@ -1,72 +1,10 @@
 // services/settingsService.ts
-import axios from 'axios';
-import { clearStoredAuth, getStoredToken } from '@/lib/auth/storage';
+import apiClient from './apiClient';
 
-// Base URL - UPDATED to match backend port 8080
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-
-// Create axios instance
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000, // 10 second timeout
-});
-
-// Add auth token to requests
-api.interceptors.request.use(
-  (config) => {
-    const token = getStoredToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // Only set JSON content type if not FormData and no content-type already set
-    if (!(config.data instanceof FormData) && !config.headers['Content-Type']) {
-      config.headers['Content-Type'] = 'application/json';
-    }
-    
-    // Log request in development
-    if (import.meta.env.DEV) {
-      console.log(`📤 ${config.method?.toUpperCase()} ${config.url}`);
-    }
-    
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
- // Handle responses with better error logging
-api.interceptors.response.use(
-  (response) => {
-    // Log success in development
-    if (import.meta.env.DEV) {
-      console.log(`✅ ${response.status} ${response.config.url}`);
-    }
-    return response;
-  },
-  (error) => {
-    // Log error details
-    if (import.meta.env.DEV) {
-      console.error('❌ API Error:', {
-        url: error.config?.url,
-        status: error.response?.status,
-        message: error.response?.data?.message || error.message
-      });
-    }
-    
-    if (error.response?.status === 401) {
-      // Clear token and redirect to login
-      clearStoredAuth();
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+const API_ORIGIN = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5000';
 
 // Base settings URL
 const SETTINGS_BASE = '/settings';
-const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 // =================== SETTINGS TYPES ===================
 export interface SchoolInfo {
@@ -333,7 +271,7 @@ export const settingsApi = {
   // Get all settings
   getAllSettings: async (): Promise<{ success: boolean; data: SettingsData }> => {
     try {
-      const response = await api.get(SETTINGS_BASE);
+      const response = await apiClient.get(SETTINGS_BASE);
       
       // Map backend response to frontend format
       const backendData = response.data.data;
@@ -357,7 +295,7 @@ export const settingsApi = {
   // Get settings by category
   getSettingsByCategory: async (category: string): Promise<any> => {
     try {
-      const response = await api.get(`${SETTINGS_BASE}/${category}`);
+      const response = await apiClient.get(`${SETTINGS_BASE}/${category}`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching ${category} settings:`, error);
@@ -387,7 +325,7 @@ export const settingsApi = {
         Object.entries(backendPayload).filter(([, value]) => value !== undefined && value !== null && value !== '')
       );
       
-      const response = await api.put(`${SETTINGS_BASE}/school`, sanitizedPayload);
+      const response = await apiClient.put(`${SETTINGS_BASE}/school`, sanitizedPayload);
       return {
         success: response.data.success,
         data: mapSchoolData(response.data.data)
@@ -408,7 +346,7 @@ export const settingsApi = {
         sessions: (data.sessions || []).map((name) => ({ name, type: 'regular' }))
       };
 
-      const response = await api.put(`${SETTINGS_BASE}/academic`, payload);
+      const response = await apiClient.put(`${SETTINGS_BASE}/academic`, payload);
       return response.data;
     } catch (error) {
       console.error('Error updating academic settings:', error);
@@ -420,7 +358,7 @@ export const settingsApi = {
   updateNotificationSettings: async (data: NotificationSetting[] | { notifications: NotificationSetting[] }): Promise<any> => {
     try {
       const payload = Array.isArray(data) ? data : (data?.notifications || []);
-      const response = await api.put(`${SETTINGS_BASE}/notifications`, payload);
+      const response = await apiClient.put(`${SETTINGS_BASE}/notifications`, payload);
       return response.data;
     } catch (error) {
       console.error('Error updating notification settings:', error);
@@ -431,7 +369,7 @@ export const settingsApi = {
   // Update security settings
   updateSecuritySettings: async (data: Partial<SecuritySettings>): Promise<any> => {
     try {
-      const response = await api.put(`${SETTINGS_BASE}/security`, data);
+      const response = await apiClient.put(`${SETTINGS_BASE}/security`, data);
       return response.data;
     } catch (error) {
       console.error('Error updating security settings:', error);
@@ -442,7 +380,7 @@ export const settingsApi = {
   // Update billing settings
   updateBillingSettings: async (data: Partial<BillingInfo>): Promise<any> => {
     try {
-      const response = await api.put(`${SETTINGS_BASE}/billing`, data);
+      const response = await apiClient.put(`${SETTINGS_BASE}/billing`, data);
       return response.data;
     } catch (error) {
       console.error('Error updating billing settings:', error);
@@ -453,7 +391,7 @@ export const settingsApi = {
   // Update advanced settings
   updateAdvancedSettings: async (data: any): Promise<any> => {
     try {
-      const response = await api.put(`${SETTINGS_BASE}/advanced`, data);
+      const response = await apiClient.put(`${SETTINGS_BASE}/advanced`, data);
       return response.data;
     } catch (error) {
       console.error('Error updating advanced settings:', error);
@@ -464,7 +402,7 @@ export const settingsApi = {
   // Create backup
   createBackup: async (): Promise<any> => {
     try {
-      const response = await api.post(`${SETTINGS_BASE}/backup`, {});
+      const response = await apiClient.post(`${SETTINGS_BASE}/backup`, {});
       return response.data;
     } catch (error) {
       console.error('Error creating backup:', error);
@@ -475,7 +413,7 @@ export const settingsApi = {
   // Export data
   exportData: async (format: string): Promise<any> => {
     try {
-      const response = await api.post(`${SETTINGS_BASE}/export`, { format });
+      const response = await apiClient.post(`${SETTINGS_BASE}/export`, { format });
       return response.data;
     } catch (error) {
       console.error('Error exporting data:', error);
@@ -486,7 +424,7 @@ export const settingsApi = {
   // Get system health
   getSystemHealth: async (): Promise<{ success: boolean; data: SystemHealth }> => {
     try {
-      const response = await api.get(`${SETTINGS_BASE}/health`);
+      const response = await apiClient.get(`${SETTINGS_BASE}/health`);
       return {
         success: response.data.success,
         data: response.data.data || defaultSettings.systemHealth
@@ -504,7 +442,7 @@ export const settingsApi = {
       formData.append('logo', file);
       
       // Send FormData - axios interceptor will let browser handle Content-Type
-      const response = await api.post(`${SETTINGS_BASE}/logo`, formData);
+      const response = await apiClient.post(`${SETTINGS_BASE}/logo`, formData);
       const relative = response.data?.data?.path || response.data?.data?.logoUrl || '';
       const absolute = relative && !String(relative).startsWith('http')
         ? `${API_ORIGIN}${relative}`
@@ -527,7 +465,7 @@ export const settingsApi = {
   // Regenerate API key
   regenerateApiKey: async (): Promise<{ apiKey: string }> => {
     try {
-      const response = await api.post(`${SETTINGS_BASE}/regenerate-key`);
+      const response = await apiClient.post(`${SETTINGS_BASE}/regenerate-key`);
       return response.data;
     } catch (error) {
       console.error('Error regenerating API key:', error);
@@ -538,7 +476,7 @@ export const settingsApi = {
   // Get all settings summary
   getSettingsSummary: async (): Promise<any> => {
     try {
-      const response = await api.get(`${SETTINGS_BASE}/summary`);
+      const response = await apiClient.get(`${SETTINGS_BASE}/summary`);
       return response.data;
     } catch (error) {
       console.error('Error fetching settings summary:', error);
@@ -550,7 +488,7 @@ export const settingsApi = {
   resetSettings: async (category?: string): Promise<any> => {
     try {
       const url = category ? `${SETTINGS_BASE}/reset/${category}` : `${SETTINGS_BASE}/reset`;
-      const response = await api.post(url);
+      const response = await apiClient.post(url);
       return response.data;
     } catch (error) {
       console.error('Error resetting settings:', error);
