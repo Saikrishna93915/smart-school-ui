@@ -21,6 +21,19 @@ import {
   BookOpen
 } from 'lucide-react';
 
+interface PerformanceData {
+  latestExam: {
+    name: string;
+    type: string;
+    percentage: number;
+    totalObtained: number;
+    totalMax: number;
+    subjects: number;
+  } | null;
+  overallPercentage: number;
+  examsTaken: number;
+}
+
 interface ChildData {
   id: string;
   name: string;
@@ -30,6 +43,7 @@ interface ChildData {
   attendanceToday: { morning: string; afternoon: string } | null;
   feesDue: number;
   totalFee: number;
+  performance: PerformanceData;
 }
 
 interface DashboardSummary {
@@ -111,7 +125,10 @@ export default function ParentDashboard() {
       </div>
 
       {/* Children Cards */}
-      {children.map(child => (
+      {children.map(child => {
+        const perf = child.performance;
+        const latestExam = perf?.latestExam;
+        return (
         <Card key={child.id}>
           <CardHeader>
             <CardTitle className="flex items-center gap-3">
@@ -125,7 +142,34 @@ export default function ParentDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-4">
+              {/* Performance Overview */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold flex items-center gap-2"><GraduationCap className="h-4 w-4" />Academic Performance</h4>
+                {latestExam ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Latest Exam</span>
+                      <span className="font-medium">{latestExam.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Score</span>
+                      <span className="font-bold text-lg">{latestExam.percentage}%</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{latestExam.totalObtained}/{latestExam.totalMax} marks • {latestExam.subjects} subjects</div>
+                    <Progress value={latestExam.percentage} className="h-2" />
+                    {perf?.overallPercentage > 0 && (
+                      <div className="flex items-center justify-between text-sm pt-1">
+                        <span className="text-muted-foreground">Overall Average</span>
+                        <span className="font-bold text-primary">{perf.overallPercentage}%</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No exam data available yet</p>
+                )}
+              </div>
+
               {/* Today's Attendance */}
               <div className="space-y-2">
                 <h4 className="text-sm font-semibold flex items-center gap-2"><Calendar className="h-4 w-4" />Today's Attendance</h4>
@@ -152,7 +196,7 @@ export default function ParentDashboard() {
                   <div className="space-y-1">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Due</span>
-                      <span className="font-semibold {child.feesDue > 0 ? 'text-red-600' : 'text-green-600'}">₹{child.feesDue.toLocaleString()}</span>
+                      <span className={`font-semibold ${child.feesDue > 0 ? 'text-red-600' : 'text-green-600'}`}>₹{child.feesDue.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Total</span>
@@ -169,18 +213,19 @@ export default function ParentDashboard() {
               <div className="space-y-2">
                 <h4 className="text-sm font-semibold">Quick Actions</h4>
                 <div className="flex flex-col gap-2">
-                  <Button variant="outline" size="sm" className="justify-start">
-                    <BookOpen className="h-4 w-4 mr-2" />View Timetable
+                  <Button variant="outline" size="sm" className="justify-start" onClick={() => window.location.href = `/parent/child-performance?childId=${child.id}`}>
+                    <TrendingUp className="h-4 w-4 mr-2" />Performance
                   </Button>
-                  <Button variant="outline" size="sm" className="justify-start">
-                    <TrendingUp className="h-4 w-4 mr-2" />View Report Card
+                  <Button variant="outline" size="sm" className="justify-start" onClick={() => window.location.href = `/parent/download-report?childId=${child.id}`}>
+                    <BookOpen className="h-4 w-4 mr-2" />Report Card
                   </Button>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
-      ))}
+      );
+      })}
     </div>
   );
 }
