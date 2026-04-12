@@ -4,7 +4,7 @@ import { Navigate } from "react-router-dom";
 import AdminDashboard from "./dashboard/AdminDashboard";
 import OwnerDashboard from "./dashboard/OwnerDashboard";
 import TeacherDashboard from "./dashboard/TeacherDashboard";
-import ParentDashboard from "./dashboard/ParentDashboard";
+import ParentDashboard from "./parent/ParentDashboard";
 import StudentDashboard from "./dashboard/StudentDashboard";
 
 export default function Dashboard() {

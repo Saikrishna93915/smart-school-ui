@@ -30,7 +30,8 @@ import {
   UserCog,
   User as UserIcon,
   BookOpenCheck,
-  Clock
+  Clock,
+  TrendingUp
 } from "lucide-react";
 import {
   IndianRupee,
