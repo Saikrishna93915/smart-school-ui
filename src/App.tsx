@@ -468,28 +468,29 @@ function App() {
                     </RoleBasedRoute>
                   } />
 
-                  <Route path="/progress/parent" element={
+                  {/* ===== PARENT ROUTES ===== */}
+                  <Route path="/parent/dashboard" element={
                     <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
                       <ProgressParentDashboard />
                     </RoleBasedRoute>
                   } />
-                  <Route path="/progress/parent/child-performance" element={
+                  <Route path="/parent/child-performance" element={
                     <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
                       <ProgressParentChildPerformance />
                     </RoleBasedRoute>
                   } />
-                  <Route path="/progress/parent/download-report" element={
+                  <Route path="/parent/download-report" element={
                     <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
                       <ProgressParentDownloadReport />
                     </RoleBasedRoute>
                   } />
-                  <Route path="/progress/parent/comparison" element={
+                  <Route path="/parent/comparison" element={
                     <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
                       <ProgressParentComparison />
                     </RoleBasedRoute>
                   } />
 
-                  {/* ===== CASHIER ROUTES ===== */}
+                  {/* ===== PROGRESS PARENT ROUTES (legacy) ===== */}
                   <Route path="/cashier" element={<RoleBasedRoute allowedRoles={['cashier', 'admin', 'owner', 'accountant']} />}>
                     <Route index element={<Navigate to="dashboard" replace />} />
                     <Route path="dashboard" element={<CashierDashboard />} />

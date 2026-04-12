@@ -103,7 +103,33 @@ const navItems: NavItem[] = [
     title: "My Children",
     icon: Users,
     href: "/parent/dashboard",
-    roles: ["parent"]
+    roles: ["parent"],
+    children: [
+      {
+        title: "Dashboard",
+        icon: LayoutDashboard,
+        href: "/parent/dashboard",
+        roles: ["parent"]
+      },
+      {
+        title: "Performance",
+        icon: TrendingUp,
+        href: "/parent/child-performance",
+        roles: ["parent"]
+      },
+      {
+        title: "Report Cards",
+        icon: FileText,
+        href: "/parent/download-report",
+        roles: ["parent"]
+      },
+      {
+        title: "Comparison",
+        icon: BarChart3,
+        href: "/parent/comparison",
+        roles: ["parent"]
+      }
+    ]
   },
   {
     title: "Progress Reports",
