@@ -59,7 +59,7 @@ const ProgressStudentDashboard = lazy(() => import('@/pages/student/dashboard/St
 const ProgressStudentMyMarks = lazy(() => import('@/pages/student/performance/MyMarks'));
 const ProgressStudentGraph = lazy(() => import('@/pages/student/performance/ProgressGraph'));
 const ProgressStudentReportCard = lazy(() => import('@/pages/student/performance/ReportCard'));
-const ProgressParentDashboard = lazy(() => import('@/pages/parent/dashboard/ParentDashboard'));
+const ProgressParentDashboard = lazy(() => import('@/pages/parent/ParentDashboard'));
 const ProgressParentChildPerformance = lazy(() => import('@/pages/parent/child/ChildPerformance'));
 const ProgressParentDownloadReport = lazy(() => import('@/pages/parent/child/DownloadReport'));
 const ProgressParentComparison = lazy(() => import('@/pages/parent/child/Comparison'));

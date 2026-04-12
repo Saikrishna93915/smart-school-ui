@@ -85,7 +85,7 @@ const navItems: NavItem[] = [
     title: "Attendance",
     icon: UserCheck,
     href: "/attendance",
-    roles: ["admin", "teacher", "parent", "student", "owner"]
+    roles: ["admin", "teacher", "student", "owner"]
   },
   {
     title: "Class-Wise Attendance",
@@ -93,11 +93,17 @@ const navItems: NavItem[] = [
     href: "/attendance/class-wise",
     roles: ["admin", "owner"]
   },
-  { 
-    title: "Exams & Results", 
-    icon: ClipboardList, 
-    href: "/exams", 
-    roles: ["admin", "teacher", "parent", "student", "owner"] 
+  {
+    title: "Exams & Results",
+    icon: ClipboardList,
+    href: "/exams",
+    roles: ["admin", "teacher", "student", "owner"]
+  },
+  {
+    title: "My Children",
+    icon: Users,
+    href: "/parent/dashboard",
+    roles: ["parent"]
   },
   {
     title: "Progress Reports",
