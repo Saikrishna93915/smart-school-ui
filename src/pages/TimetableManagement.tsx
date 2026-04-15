@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import TimetableGrid from '../components/timetable/TimetableGrid';
 import TeacherTimetable from '../components/timetable/TeacherTimetable';
 import StudentTimetable from '../components/timetable/StudentTimetable';
+import ParentTimetable from './parent/ParentTimetable';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -698,6 +699,8 @@ const TimetableManagement = () => {
         <TeacherTimetable />
       ) : userRole === 'student' ? (
         <StudentTimetable />
+      ) : userRole === 'parent' ? (
+        <ParentTimetable />
       ) : (
         <Card className="border-destructive">
           <CardContent className="p-12 text-center">

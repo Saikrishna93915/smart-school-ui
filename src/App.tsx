@@ -59,10 +59,12 @@ const ProgressStudentDashboard = lazy(() => import('@/pages/student/dashboard/St
 const ProgressStudentMyMarks = lazy(() => import('@/pages/student/performance/MyMarks'));
 const ProgressStudentGraph = lazy(() => import('@/pages/student/performance/ProgressGraph'));
 const ProgressStudentReportCard = lazy(() => import('@/pages/student/performance/ReportCard'));
-const ProgressParentDashboard = lazy(() => import('@/pages/parent/ParentDashboard'));
 const ProgressParentChildPerformance = lazy(() => import('@/pages/parent/child/ChildPerformance'));
 const ProgressParentDownloadReport = lazy(() => import('@/pages/parent/child/DownloadReport'));
 const ProgressParentComparison = lazy(() => import('@/pages/parent/child/Comparison'));
+const ParentTimetable = lazy(() => import('@/pages/parent/ParentTimetable'));
+const ParentHub = lazy(() => import('@/pages/parent/ParentHub'));
+const ChildDashboard = lazy(() => import('@/pages/parent/ChildDashboard'));
 
 // Dashboard pages
 const AdminDashboard = lazy(() => import('@/pages/dashboard/AdminDashboard'));
@@ -114,9 +116,9 @@ const ReceiptView = lazy(() => import('@/pages/finance/ReceiptView'));
 
 const FeeStructure = lazy(() => import('@/pages/fees/Structure'));
 const CurrentDues = lazy(() => import('@/pages/fees/Dues'));
-const PaymentHistoryStudent = lazy(() => import('@/pages/fees/History'));
-const PayOnline = lazy(() => import('@/pages/fees/Pay'));
-const Receipts = lazy(() => import('@/pages/fees/Receipts'));
+const PaymentHistoryStudent = lazy(() => import('@/pages/fees/HistoryNew'));
+const Receipts = lazy(() => import('@/pages/fees/ReceiptsNew'));
+const PayOnline = lazy(() => import('@/pages/fees/PayOnlineNew'));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -157,7 +159,7 @@ const RoleBasedRoute = ({
       owner: '/dashboard',
       teacher: '/dashboard/teacher',
       student: '/dashboard/student',
-      parent: '/dashboard',
+      parent: '/parent/dashboard',
       accountant: '/finance/collections',
       cashier: '/cashier/dashboard',
       principal: '/principal/dashboard',
@@ -353,7 +355,7 @@ function App() {
                     <Route path="structure" element={<FeeStructure />} />
                     <Route path="dues" element={<CurrentDues />} />
                     <Route path="history" element={<PaymentHistoryStudent />} />
-                    <Route path="pay" element={<PayOnline />} />
+                    <Route path="pay" element={<RoleBasedRoute allowedRoles={['student']}><PayOnline /></RoleBasedRoute>} />
                     <Route path="receipts" element={<Receipts />} />
                   </Route>
 
@@ -404,7 +406,7 @@ function App() {
                     </RoleBasedRoute>
                   } />
                   <Route path="/timetable" element={
-                    <RoleBasedRoute allowedRoles={['admin', 'owner', 'teacher', 'student']}>
+                    <RoleBasedRoute allowedRoles={['admin', 'owner', 'teacher', 'student', 'parent']}>
                       <TimetableManagement />
                     </RoleBasedRoute>
                   } />
@@ -471,22 +473,32 @@ function App() {
                   {/* ===== PARENT ROUTES ===== */}
                   <Route path="/parent/dashboard" element={
                     <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
-                      <ProgressParentDashboard />
+                      <ParentHub />
                     </RoleBasedRoute>
                   } />
-                  <Route path="/parent/child-performance" element={
+                  <Route path="/parent/child/:childId" element={
+                    <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
+                      <ChildDashboard />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/parent/child/:childId/performance" element={
                     <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
                       <ProgressParentChildPerformance />
                     </RoleBasedRoute>
                   } />
-                  <Route path="/parent/download-report" element={
+                  <Route path="/parent/child/:childId/reports" element={
                     <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
                       <ProgressParentDownloadReport />
                     </RoleBasedRoute>
                   } />
-                  <Route path="/parent/comparison" element={
+                  <Route path="/parent/child/:childId/comparison" element={
                     <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
                       <ProgressParentComparison />
+                    </RoleBasedRoute>
+                  } />
+                  <Route path="/parent/child/:childId/timetable" element={
+                    <RoleBasedRoute allowedRoles={['parent', 'admin', 'owner']}>
+                      <ParentTimetable />
                     </RoleBasedRoute>
                   } />
 

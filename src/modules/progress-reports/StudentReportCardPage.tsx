@@ -32,6 +32,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import apiClient from '@/Services/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
 
 const ensureArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
 
@@ -84,6 +85,7 @@ interface ReportData {
 }
 
 export default function StudentReportCardPage() {
+  const { user } = useAuth();
   const [students, setStudents] = useState<StudentDoc[]>([]);
   const [examCycles, setExamCycles] = useState<any[]>([]);
   const [reportData, setReportData] = useState<ReportData | null>(null);
@@ -97,6 +99,36 @@ export default function StudentReportCardPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+
+      // For parents: skip admin endpoints, use parent-specific endpoints
+      if (user?.role === 'parent') {
+        // Fetch parent's children to populate student list
+        const dashboardRes = await apiClient.get('/parent/dashboard');
+        const children = dashboardRes.data?.data?.children || [];
+
+        // Transform children data to StudentDoc format
+        const studentList: StudentDoc[] = children.map((c: any) => ({
+          _id: String(c.id),
+          studentName: c.name,
+          admissionNo: c.admissionNumber,
+          class: { className: c.className, section: c.section },
+          className: c.className,
+          section: c.section,
+        }));
+
+        setStudents(studentList);
+
+        // If only one child, auto-select and fetch their report
+        if (studentList.length === 1) {
+          setSelectedStudent(studentList[0]._id);
+          await fetchReportCard(studentList[0]._id);
+        }
+
+        setLoading(false);
+        return;
+      }
+
+      // For admin/student: use original endpoints
       const [studentsRes, cyclesRes] = await Promise.all([
         apiClient.get('/admin/students'),
         apiClient.get('/progress-reports/exam-cycles', { params: { isPublished: true } }),
@@ -108,7 +140,7 @@ export default function StudentReportCardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -123,9 +155,22 @@ export default function StudentReportCardPage() {
       const raw = res.data?.data || res.data || null;
 
       if (raw) {
+        // Normalize student data — backend returns nested student.firstName/lastName and admissionNumber
+        const rawStudent = raw.student || {};
+        const normalizedStudent: StudentDoc = {
+          ...rawStudent,
+          studentName: rawStudent.studentName
+            || `${rawStudent.student?.firstName || ''} ${rawStudent.student?.lastName || ''}`.trim()
+            || rawStudent.name
+            || '—',
+          admissionNo: rawStudent.admissionNo || rawStudent.admissionNumber || '—',
+          className: rawStudent.class?.className || rawStudent.className || '—',
+          section: rawStudent.class?.section || rawStudent.section || '—',
+        };
+
         // Transform API response to match frontend interface
         const transformed: ReportData = {
-          student: raw.student || {},
+          student: normalizedStudent,
           reports: (raw.reports || []).map((r: any) => ({
             examCycleName: r.exam?.examName || 'Unknown Exam',
             examType: r.exam?.examType || '',
@@ -283,8 +328,8 @@ export default function StudentReportCardPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div><p className="text-sm text-muted-foreground">Name</p><p className="font-semibold">{reportData.student?.studentName || '—'}</p></div>
-                <div><p className="text-sm text-muted-foreground">Admission No</p><p className="font-semibold">{reportData.student?.admissionNo || '—'}</p></div>
+                <div><p className="text-sm text-muted-foreground">Name</p><p className="font-semibold">{reportData.student?.studentName || `${reportData.student?.student?.firstName || ''} ${reportData.student?.student?.lastName || ''}`.trim() || '—'}</p></div>
+                <div><p className="text-sm text-muted-foreground">Admission No</p><p className="font-semibold">{reportData.student?.admissionNo || reportData.student?.admissionNumber || '—'}</p></div>
                 <div><p className="text-sm text-muted-foreground">Class</p><p className="font-semibold">{reportData.student?.class?.className || reportData.student?.className || '—'}</p></div>
                 <div><p className="text-sm text-muted-foreground">Section</p><p className="font-semibold">{reportData.student?.class?.section || reportData.student?.section || '—'}</p></div>
               </div>

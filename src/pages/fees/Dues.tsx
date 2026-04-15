@@ -16,10 +16,12 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { feesService, StudentDue, StudentDuesResponse } from '@/api/services/feesService';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 const CurrentDues = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [duesData, setDuesData] = useState<StudentDuesResponse | null>(null);
@@ -299,7 +301,7 @@ const CurrentDues = () => {
       </Card>
 
       {/* Action Buttons */}
-      {duesData.dues.totalDue > 0 && (
+      {duesData.dues.totalDue > 0 && user?.role !== 'parent' && (
         <div className="flex gap-3">
           <Button
             size="lg"
@@ -323,6 +325,21 @@ const CurrentDues = () => {
             {formatCurrency(duesData.dues.totalWithPenalty)})
           </Button>
         </div>
+      )}
+
+      {/* Locked message for parents */}
+      {duesData.dues.totalDue > 0 && user?.role === 'parent' && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Online Payment Unavailable</p>
+                <p className="text-xs text-amber-700 mt-0.5">Online payments are currently not available for parents. Please contact the school accounts office to make fee payments.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Important Notes */}

@@ -64,17 +64,16 @@ const Receipts = () => {
   const handleDownload = async (receipt: Receipt) => {
     try {
       setDownloadingId(receipt._id);
-      const blob = await feesService.downloadReceipt(receipt._id);
-      feesService.downloadFile(blob, `receipt_${receipt.receiptNo}.json`);
-      
+      await feesService.downloadReceipt(receipt._id);
+
       toast({
         title: "Success",
-        description: "Receipt downloaded successfully",
+        description: "Receipt opened. Use Print or Save as PDF.",
       });
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to download receipt",
+        description: "Failed to open receipt. Please allow popups.",
         variant: "destructive",
       });
     } finally {

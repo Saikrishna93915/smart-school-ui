@@ -64,11 +64,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { 
-    title: "Dashboard", 
-    icon: LayoutDashboard, 
-    href: "/dashboard", 
-    roles: ["admin", "teacher", "parent", "student", "owner", "accountant"] 
+  {
+    title: "Dashboard",
+    icon: LayoutDashboard,
+    href: "/dashboard",
+    roles: ["admin", "teacher", "student", "owner", "accountant"]
   },
   { 
     title: "Students", 
@@ -101,7 +101,7 @@ const navItems: NavItem[] = [
     roles: ["admin", "teacher", "student", "owner"]
   },
   {
-    title: "My Children",
+    title: "Parent Portal",
     icon: Users,
     href: "/parent/dashboard",
     roles: ["parent"],
@@ -113,9 +113,15 @@ const navItems: NavItem[] = [
         roles: ["parent"]
       },
       {
-        title: "Performance",
+        title: "Academic Performance",
         icon: TrendingUp,
         href: "/parent/child-performance",
+        roles: ["parent"]
+      },
+      {
+        title: "Class Comparison",
+        icon: BarChart3,
+        href: "/parent/comparison",
         roles: ["parent"]
       },
       {
@@ -125,9 +131,9 @@ const navItems: NavItem[] = [
         roles: ["parent"]
       },
       {
-        title: "Comparison",
-        icon: BarChart3,
-        href: "/parent/comparison",
+        title: "Timetable",
+        icon: Clock,
+        href: "/timetable",
         roles: ["parent"]
       }
     ]
@@ -225,41 +231,41 @@ const navItems: NavItem[] = [
   },
   
   // ===== FEES SECTION (For Parents/Students) =====
-  { 
-    title: "My Fees", 
-    icon: Wallet, 
-    href: "/fees", 
+  {
+    title: "My Fees",
+    icon: Wallet,
+    href: "/fees",
     roles: ["parent", "student"],
     children: [
-      { 
-        title: "Fee Structure", 
-        icon: FileText, 
-        href: "/fees/structure", 
-        roles: ["parent", "student"] 
+      {
+        title: "Fee Structure",
+        icon: FileText,
+        href: "/fees/structure",
+        roles: ["parent", "student"]
       },
-      { 
-        title: "Current Dues", 
-        icon: AlertCircle, 
-        href: "/fees/dues", 
-        roles: ["parent", "student"] 
+      {
+        title: "Current Dues",
+        icon: AlertCircle,
+        href: "/fees/dues",
+        roles: ["parent", "student"]
       },
-      { 
-        title: "Payment History", 
-        icon: Receipt, 
-        href: "/fees/history", 
-        roles: ["parent", "student"] 
+      {
+        title: "Payment History",
+        icon: Receipt,
+        href: "/fees/history",
+        roles: ["parent", "student"]
       },
-      { 
-        title: "Pay Online", 
-        icon: CreditCard, 
-        href: "/fees/pay", 
-        roles: ["parent", "student"] 
+      {
+        title: "Pay Online",
+        icon: CreditCard,
+        href: "/fees/pay",
+        roles: ["student"]
       },
-      { 
-        title: "Receipts", 
-        icon: Download, 
-        href: "/fees/receipts", 
-        roles: ["parent", "student"] 
+      {
+        title: "Receipts",
+        icon: Download,
+        href: "/fees/receipts",
+        roles: ["parent", "student"]
       },
     ]
   },
@@ -373,6 +379,18 @@ export function AppSidebar() {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+  const [parentChildren, setParentChildren] = useState<{ id: string; name: string }[]>([]);
+
+  // Fetch parent's children for dynamic sidebar
+  useEffect(() => {
+    if (user?.role !== 'parent') return;
+    import('@/Services/apiClient').then(({ default: apiClient }) => {
+      apiClient.get('/parent/dashboard').then(res => {
+        const children = res.data?.data?.children || [];
+        setParentChildren(children.map((c: any) => ({ id: String(c.id), name: c.name })));
+      }).catch(() => {});
+    });
+  }, [user?.role]);
 
   if (!user) return null;
 
@@ -427,6 +445,47 @@ export function AppSidebar() {
     if (user.role === "cashier") return cashierNavItems;
     if (user.role === "principal") return principalNavItems;
     if (user.role === "driver") return driverNavItems;
+
+    // For parents: generate dynamic nav items with each child as a collapsible section
+    if (user.role === "parent" && parentChildren.length > 0) {
+      const parentItems: NavItem[] = [];
+
+      parentChildren.forEach(child => {
+        parentItems.push({
+          title: child.name,
+          icon: Users,
+          href: `/parent/child/${child.id}`,
+          roles: ["parent"],
+          children: [
+            { title: "Dashboard", icon: LayoutDashboard, href: `/parent/child/${child.id}`, roles: ["parent"] },
+            { title: "Academic Performance", icon: TrendingUp, href: `/parent/child/${child.id}/performance`, roles: ["parent"] },
+            { title: "Class Comparison", icon: BarChart3, href: `/parent/child/${child.id}/comparison`, roles: ["parent"] },
+            { title: "Report Cards", icon: FileText, href: `/parent/child/${child.id}/reports`, roles: ["parent"] },
+            { title: "Timetable", icon: Clock, href: `/parent/child/${child.id}/timetable`, roles: ["parent"] },
+          ]
+        });
+      });
+
+      // Add shared items that parents can access
+      parentItems.push({
+        title: "My Fees",
+        icon: Wallet,
+        href: "/fees",
+        roles: ["parent"],
+        children: [
+          { title: "Fee Structure", icon: FileText, href: "/fees/structure", roles: ["parent"] },
+          { title: "Current Dues", icon: AlertCircle, href: "/fees/dues", roles: ["parent"] },
+          { title: "Payment History", icon: Receipt, href: "/fees/history", roles: ["parent"] },
+          { title: "Receipts", icon: Download, href: "/fees/receipts", roles: ["parent"] },
+        ]
+      });
+
+      parentItems.push({ title: "Transport", icon: Bus, href: "/transport", roles: ["parent"] });
+      parentItems.push({ title: "Communication", icon: MessageSquare, href: "/communication", roles: ["parent"] });
+
+      return parentItems;
+    }
+
     return navItems.filter(item => item.roles.includes(user.role));
   };
 

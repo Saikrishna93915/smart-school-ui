@@ -23,10 +23,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { feesService } from '@/api/services/feesService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import apiClient from '@/Services/apiClient';
 
 interface LocationState {
   amount?: number;
   selectedDues?: number[];
+  studentId?: string;
+  studentName?: string;
 }
 
 const PayOnline = () => {
@@ -112,6 +115,49 @@ const PayOnline = () => {
         return;
       }
 
+      // For parents: resolve the correct student ID from their children list
+      let targetStudentId = locationState.studentId;
+
+      if (user.role === 'parent') {
+        if (!targetStudentId) {
+          // Fetch parent's children to get student IDs
+          try {
+            const res = await apiClient.get('/parent/dashboard');
+            const data = res.data?.data;
+            const children = data?.children;
+            if (!children || children.length === 0) {
+              toast({
+                title: "Error",
+                description: "No children linked to your account",
+                variant: "destructive",
+              });
+              return;
+            }
+            // If multiple children, use the first one (should be selected beforehand)
+            targetStudentId = String(children[0].id);
+          } catch {
+            toast({
+              title: "Error",
+              description: "Failed to fetch your children's data",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+      } else {
+        // For students: use linkedId from their user profile
+        targetStudentId = user.linkedId;
+      }
+
+      if (!targetStudentId) {
+        toast({
+          title: "Error",
+          description: "Could not identify the student. Please select a child first.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setIsProcessing(true);
 
       // Simulate transaction ID (in real scenario, this would come from payment gateway)
@@ -120,7 +166,7 @@ const PayOnline = () => {
 
       // Call backend payment API
       const result = await feesService.processPayment({
-        studentId: user._id,
+        studentId: targetStudentId,
         amount: parseFloat(amount),
         paymentMethod: paymentMethod as any,
         transactionId: txnId,
