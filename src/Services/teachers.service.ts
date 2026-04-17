@@ -322,7 +322,7 @@ export const TeachersService = {
   async assignClasses(id: string, classes: AssignedClass[]): Promise<Teacher> {
     try {
       const payload = { assignedClasses: classes };
-      const response = await apiClient.post(`${BASE_ENDPOINT}/${id}/assign-classes`, payload);
+      const response = await apiClient.put(`${BASE_ENDPOINT}/${id}/assign-classes`, payload);
       const responseData = response.data;
       
       // Extract teacher data from response
